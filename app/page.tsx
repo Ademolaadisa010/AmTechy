@@ -9,6 +9,7 @@ import Web from "@/public/web.jpg";
 import Uiux from "@/public/uiux.jpg";
 import Data from "@/public/data.jpg";
 import App from "@/public/app.jpg";
+import Link from "next/link";
 
 
 export default function HomePage(){
@@ -30,8 +31,9 @@ export default function HomePage(){
             <a href="#testimonials" className="text-gray-600 hover:text-[#1e40af] transition">Testimonials</a>
           </div>
           <div className="flex items-center space-x-4">
-            <button className="hidden md:block text-gray-600 hover:text-[#1e40af] cursor-pointer transition font-medium">Sign In</button>
-            <button className="bg-[#1e40af] cursor-pointer text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition font-medium">Get Started</button>
+            <Link href="/login">
+            <button className="hidden md:block text-gray-600 hover:text-[#1e40af] cursor-pointer transition font-medium">Sign In</button></Link>
+            <Link href="/register"><button className="bg-[#1e40af] cursor-pointer text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition font-medium">Get Started</button></Link>
           </div>
         </div>
         </div>
@@ -46,8 +48,8 @@ export default function HomePage(){
                 <h1 className="text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">Find Your Tech Career Path with AI</h1>
                 <p className="text-xl text-gray-600 leading-relaxed">Learn tech the smart way — guided by AI or real tutors. Start your journey from beginner to professional with personalized learning paths.</p>
                 <div className="flex flex-col sm:flex-row gap-4">
-                <button className="bg-[#1e40af] text-white px-8 py-4 rounded-xl hover:bg-blue-700 transition font-semibold text-lg shadow-lg hover:shadow-xl">Get Started Free</button>
-                <button className="bg-white text-[#1e40af] border-2 border-[#1e40af] px-8 py-4 rounded-xl hover:bg-[#1e40af] hover:text-white transition font-semibold text-lg">Take Career Quiz</button>
+                <Link href="/register"><button className="bg-[#1e40af] text-white px-8 py-4 rounded-xl hover:bg-blue-700 transition font-semibold text-lg shadow-lg hover:shadow-xl">Get Started Free</button></Link>
+                <Link href="/login"><button className="bg-white text-[#1e40af] border-2 border-[#1e40af] px-8 py-4 rounded-xl hover:bg-[#1e40af] hover:text-white transition font-semibold text-lg">Take Career Quiz</button></Link>
               </div>
               <div className="flex items-center space-x-6 pt-4">
                 <div className="flex -space-x-3">
@@ -217,7 +219,7 @@ export default function HomePage(){
         <span className="text-sm font-semibold text-gray-700">Career Outcome:</span>
         <span className="text-sm text-[#1e40af] font-semibold">Frontend/Backend Developer</span>
         </div>
-        <button className="w-full mt-6 bg-[#1e40af] text-white py-3 rounded-lg hover:bg-blue-700 transition font-semibold group-hover:shadow-lg">Start Learning</button>
+        <Link href="/login"><button className="w-full mt-6 bg-[#1e40af] text-white py-3 rounded-lg hover:bg-blue-700 transition font-semibold group-hover:shadow-lg">Start Learning</button></Link>
         </div>
         </div>
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition group">
@@ -240,7 +242,7 @@ export default function HomePage(){
         <span className="text-sm font-semibold text-gray-700">Career Outcome:</span>
         <span className="text-sm text-[#7c3aed] font-semibold">Product Designer</span>
         </div>
-        <button className="w-full mt-6 bg-[#7c3aed] text-white py-3 rounded-lg hover:bg-purple-700 transition font-semibold group-hover:shadow-lg">Start Learning</button>
+        <Link href="/login"><button className="w-full mt-6 bg-[#7c3aed] text-white py-3 rounded-lg hover:bg-purple-700 transition font-semibold group-hover:shadow-lg">Start Learning</button></Link>
         </div>
         </div>
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition group">
@@ -263,7 +265,7 @@ export default function HomePage(){
         <span className="text-sm font-semibold text-gray-700">Career Outcome:</span>
         <span className="text-sm text-[#10b981] font-semibold">Data Analyst</span>
         </div>
-        <button className="w-full mt-6 bg-[#10b981] text-white py-3 rounded-lg hover:bg-green-700 transition font-semibold group-hover:shadow-lg">Start Learning</button>
+        <Link href="/register"><button className="w-full mt-6 bg-[#10b981] text-white py-3 rounded-lg hover:bg-green-700 transition font-semibold group-hover:shadow-lg">Start Learning</button></Link>
         </div>
         </div>
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition group">
@@ -286,7 +288,7 @@ export default function HomePage(){
         <span className="text-sm font-semibold text-gray-700">Career Outcome:</span>
         <span className="text-sm text-indigo-600 font-semibold">Mobile Developer</span>
         </div>
-        <button className="w-full mt-6 bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition font-semibold group-hover:shadow-lg">Start Learning</button>
+        <Link href="/register"><button className="w-full mt-6 bg-indigo-600 text-white py-3 rounded-lg hover:bg-indigo-700 transition font-semibold group-hover:shadow-lg">Start Learning</button></Link>
         </div>
         </div>
         <div className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition group">
@@ -309,7 +311,7 @@ export default function HomePage(){
         <span className="text-sm font-semibold text-gray-700">Career Outcome:</span>
         <span className="text-sm text-red-600 font-semibold">Security Analyst</span>
         </div>
-        <button className="w-full mt-6 bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 transition font-semibold group-hover:shadow-lg">Start Learning</button>
+        <Link href="login"><button className="w-full mt-6 bg-red-600 text-white py-3 rounded-lg hover:bg-red-700 transition font-semibold group-hover:shadow-lg">Start Learning</button></Link>
         </div>
         </div>
         <div className="bg-gradient-to-br from-[#1e40af] to-[#7c3aed] rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition p-8 flex flex-col items-center justify-center text-center text-white">
@@ -318,7 +320,7 @@ export default function HomePage(){
         </svg>
         <h3 className="text-2xl font-bold mb-3">More Tracks Coming Soon</h3>
         <p className="text-blue-100 mb-6">Cloud Computing, DevOps, AI/ML, Blockchain, and more exciting paths are on the way!</p>
-        <button className="bg-white text-[#1e40af] px-6 py-3 rounded-lg hover:bg-gray-100 transition font-semibold">Get Notified</button>
+        <Link href="/register"><button className="bg-white text-[#1e40af] px-6 py-3 rounded-lg hover:bg-gray-100 transition font-semibold">Get Notified</button></Link>
         </div>
         </div>
         </div>
@@ -427,7 +429,7 @@ export default function HomePage(){
         </div>
         </div>
         <div className="mt-16 text-center">
-        <button className="bg-white text-[#1e40af] px-10 py-4 rounded-xl hover:bg-gray-100 transition font-bold text-lg shadow-xl">Start Your Journey Now</button>
+        <Link href="/register"><button className="bg-white text-[#1e40af] px-10 py-4 rounded-xl hover:bg-gray-100 transition font-bold text-lg shadow-xl">Start Your Journey Now</button></Link>
         </div>
         </div>
       </section>
@@ -503,25 +505,25 @@ export default function HomePage(){
         <h2 className="text-4xl md:text-5xl font-bold mb-6">Start Your Tech Journey Today</h2>
         <p className="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">Join thousands of African learners who are transforming their careers with AI-powered guidance and expert mentorship.</p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center mb-8">
-        <button className="bg-white text-[#1e40af] px-10 py-4 rounded-xl hover:bg-gray-100 transition font-bold text-lg shadow-xl">Get Started Free</button>
-        <button className="bg-transparent border-2 border-white text-white px-10 py-4 rounded-xl hover:bg-white hover:text-[#1e40af] transition font-bold text-lg">Take Career Quiz</button>
+        <Link href="/register"><button className="bg-white text-[#1e40af] px-10 py-4 rounded-xl hover:bg-gray-100 transition font-bold text-lg shadow-xl">Get Started Free</button></Link>
+        <Link href="login"><button className="bg-transparent border-2 border-white text-white px-10 py-4 rounded-xl hover:bg-white hover:text-[#1e40af] transition font-bold text-lg">Take Career Quiz</button></Link>
         </div>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-6 text-sm text-blue-100">
         <div className="flex items-center space-x-2">
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
         </svg>
         <span>No credit card required</span>
         </div>
         <div className="flex items-center space-x-2">
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
         </svg>
         <span>Cancel anytime</span>
         </div>
         <div className="flex items-center space-x-2">
         <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"></path>
         </svg>
         <span>14-day money-back guarantee</span>
         </div>
@@ -587,8 +589,10 @@ export default function HomePage(){
         </ul>
         </div>
         </div>
+        
         <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center">
         <p className="text-gray-400 text-sm mb-4 md:mb-0">&copy; 2024 AmTechy. All rights reserved.</p>
+        <p className="text-gray-400 text-sm mb-4 md:mb-0">Design by Abdulmalik with Peace and Love. <i className="fa-solid fa-heart"></i></p>
         <div className="flex items-center space-x-4 text-sm">
         <a href="#" className="hover:text-[#1e40af] transition">English</a>
         <span className="text-gray-600">|</span>
