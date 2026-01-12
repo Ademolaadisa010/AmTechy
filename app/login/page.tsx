@@ -47,7 +47,6 @@ export default function Login() {
       id="auth-screen"
       className="flex flex-col md:flex-row min-h-[800px] bg-white relative z-50"
     >
-      {/* LEFT SIDE */}
       <div className="hidden md:flex md:w-1/2 bg-slate-900 relative overflow-hidden flex-col justify-between p-12 text-white">
         <div className="absolute inset-0 opacity-40">
           <Image src={Learning} className="w-full h-full object-cover" alt="Students learning" />
