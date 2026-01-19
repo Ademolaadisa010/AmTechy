@@ -115,12 +115,10 @@ export default function CourseDetail() {
     if (!enrollment || !course) return;
 
     try {
-      // Update last accessed
       await updateDoc(doc(db, "enrollments", enrollment.id), {
         lastAccessed: new Date(),
       });
 
-      // Navigate to first lesson
       router.push(`/course/${courseId}/lesson/${enrollment.currentModule}`);
     } catch (error) {
       console.error("Error starting course:", error);
@@ -153,7 +151,6 @@ export default function CourseDetail() {
       <main className="flex-1 flex bg-slate-50 min-w-0">
         <SideBar />
         <section className="flex-1 overflow-y-auto">
-          {/* Hero Section */}
           <div className="bg-gradient-to-br from-indigo-900 via-purple-900 to-indigo-900 text-white">
             <div className="max-w-6xl mx-auto px-6 py-12">
               <button
@@ -165,7 +162,6 @@ export default function CourseDetail() {
               </button>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Left: Course Info */}
                 <div className="lg:col-span-2">
                   <div className="flex items-center gap-3 mb-4">
                     <span className="px-3 py-1 bg-white/20 backdrop-blur-sm text-white text-sm font-bold rounded-full">
@@ -212,7 +208,6 @@ export default function CourseDetail() {
                   </div>
                 </div>
 
-                {/* Right: Enrollment Card */}
                 <div className="lg:col-span-1">
                   <div className="bg-white rounded-2xl shadow-2xl p-6 sticky top-6">
                     {course.imageUrl ? (
