@@ -30,7 +30,7 @@ interface Tutor {
 export default function BookTutor() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const tutorId = searchParams.get('tutorId');
+  const [tutorId, setTutorId] = useState<string | null>(null);
   
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -86,30 +86,47 @@ export default function BookTutor() {
   const timeSlots = getTimeSlots();
 
   useEffect(() => {
-    if (!tutorId) {
-      router.push("/find-tutor");
-      return;
-    }
+    const id = searchParams.get('tutorId');
+    console.log("URL tutorId:", id);
+    setTutorId(id);
+  }, [searchParams]);
 
+  useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUserId(user.uid);
-        await fetchTutor();
-        setLoading(false);
+        if (tutorId) {
+          await fetchTutor();
+          setLoading(false);
+        } else if (tutorId === null) {
+          // Still waiting for tutorId to be set
+          return;
+        } else {
+          console.error("No tutor ID provided");
+          alert("Invalid tutor selection. Please try again.");
+          router.push("/find-tutor");
+          setLoading(false);
+        }
       } else {
         router.push("/login");
       }
     });
 
     return () => unsubscribe();
-  }, [tutorId]);
+  }, [tutorId, router]);
 
   const fetchTutor = async () => {
-    if (!tutorId) return;
+    if (!tutorId) {
+      console.error("No tutor ID provided");
+      return;
+    }
     
     try {
+      console.log("Fetching tutor with ID:", tutorId);
       const tutorDoc = await getDoc(doc(db, "tutors", tutorId));
+      
       if (tutorDoc.exists()) {
+        console.log("Tutor found:", tutorDoc.data());
         setTutor({
           id: tutorDoc.id,
           name: tutorDoc.data().name || "",
@@ -125,10 +142,13 @@ export default function BookTutor() {
           verified: tutorDoc.data().verified || false,
         });
       } else {
+        console.error("Tutor not found with ID:", tutorId);
+        alert("Tutor not found. Redirecting to find tutors page.");
         router.push("/find-tutor");
       }
     } catch (error) {
       console.error("Error fetching tutor:", error);
+      alert("Error loading tutor information. Please try again.");
       router.push("/find-tutor");
     }
   };

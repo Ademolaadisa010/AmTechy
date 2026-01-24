@@ -76,7 +76,7 @@ export default function SideBar() {
   const navItems: NavItem[] = [
     { href: "/dashboard", icon: "fa-house", label: "Dashboard" },
     { href: "/mylearning", icon: "fa-book-open", label: "My Learning", badge: enrollmentCount },
-    { href: "/findTutor", icon: "fa-users", label: "Find Tutors" },
+    { href: "/find-tutor", icon: "fa-users", label: "Find Tutors" },
     { href: "/jobs", icon: "fa-briefcase", label: "Jobs & Gigs" },
     { href: "/community", icon: "fa-comment", label: "Community" },
     { href: "/progress", icon: "fa-chart-line", label: "My Progress" },
@@ -208,7 +208,6 @@ export default function SideBar() {
             </Link>
           </div>
 
-          {/* User Profile */}
           <Link href="/profile">
             <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-slate-50 transition-colors cursor-pointer">
               {userData?.photoURL ? (

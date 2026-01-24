@@ -81,11 +81,11 @@ export default function FindTutor() {
 
   const fetchTutors = async () => {
     try {
-      const tutorsQuery = query(
-        collection(db, "tutors"),
-        where("status", "==", "active")
-      );
+      // Fetch all tutors (remove status filter for now)
+      const tutorsQuery = query(collection(db, "tutors"));
       const snapshot = await getDocs(tutorsQuery);
+
+      console.log("Total tutors found:", snapshot.docs.length);
 
       const tutorsData: Tutor[] = snapshot.docs.map((doc) => ({
         id: doc.id,
@@ -218,13 +218,13 @@ export default function FindTutor() {
                   <div
                     key={tutor.id}
                     className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-lg transition-shadow cursor-pointer"
-                    onClick={() => router.push(`/tutor/${tutor.id}`)}
+                    onClick={() => router.push(`/book-tutor?tutorId=${tutor.id}`)}
                   >
                     <div className="flex items-start gap-3 mb-3">
                       <img
                         src={
                           tutor.profileImage ||
-                          `https://ui-avatars.com/api/?name=${tutor.name}&background=6366f1&color=fff`
+                          `https://ui-avatars.com/api/?name=${encodeURIComponent(tutor.name)}&background=6366f1&color=fff`
                         }
                         alt={tutor.name}
                         className="w-12 h-12 rounded-full object-cover"
@@ -291,7 +291,7 @@ export default function FindTutor() {
                 <div
                   key={tutor.id}
                   className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
-                  onClick={() => router.push(`/tutor/${tutor.id}`)}
+                  onClick={() => router.push(`/book-tutor?tutorId=${tutor.id}`)}
                 >
                   <div className="p-6">
                     <div className="flex items-start justify-between mb-4">
@@ -299,7 +299,7 @@ export default function FindTutor() {
                         <img
                           src={
                             tutor.profileImage ||
-                            `https://ui-avatars.com/api/?name=${tutor.name}&background=6366f1&color=fff`
+                            `https://ui-avatars.com/api/?name=${encodeURIComponent(tutor.name)}&background=6366f1&color=fff`
                           }
                           alt={tutor.name}
                           className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-sm"
@@ -360,7 +360,7 @@ export default function FindTutor() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          router.push(`/tutor/${tutor.id}/book`);
+                          router.push(`/book-tutor?tutorId=${tutor.id}`);
                         }}
                         className="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors"
                       >
