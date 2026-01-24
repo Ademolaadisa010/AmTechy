@@ -1,4 +1,6 @@
+"use client"
 import Image from "next/image";
+import { motion } from "framer-motion";
 import Hero from "@/public/hero.jpg";
 import HeroSec from "@/public/hero-sec.jpg";
 import two from "@/public/two.jpg";
@@ -15,7 +17,11 @@ import Link from "next/link";
 export default function HomePage(){
   return(
     <div className="w-full min-h-screen font-sans antialiased bg-white text-gray-900">
-      <nav className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50">
+      <motion.nav 
+        initial={{y:-50, opacity:0}}
+        whileInView={{y:0, opacity:1}}
+        transition={{duration:1}}
+      className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-2">
@@ -37,7 +43,7 @@ export default function HomePage(){
           </div>
         </div>
         </div>
-      </nav>
+      </motion.nav>
 
 
       <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-blue-50 via-purple-50 to-green-50">
@@ -64,7 +70,11 @@ export default function HomePage(){
                 </div>
               </div>
             </div>
-            <div className="relative">
+            <motion.div className="relative"
+              initial={{x:100}}
+              whileInView={{x:0}}
+              transition={{duration:2}}
+            >
               <Image src={HeroSec} alt="Learning with AI" className="rounded-2xl shadow-2xl"/>
               <div className="absolute -bottom-6 -left-6 bg-white p-6 rounded-xl shadow-xl">
                 <div className="flex items-center space-x-3">
@@ -79,7 +89,7 @@ export default function HomePage(){
                   </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>
@@ -115,7 +125,11 @@ export default function HomePage(){
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">Many aspiring tech professionals face the same challenge</p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-white p-8 rounded-2xl shadow-sm">
+            <motion.div 
+              initial={{opacity:0, scale:0.5}}
+              whileInView={{opacity:1, scale:1}}
+              transition={{duration:1, type: "spring",}}
+            className="bg-white p-8 rounded-2xl shadow-sm">
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-6">
                 <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -123,8 +137,12 @@ export default function HomePage(){
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-3">Don't Know Where to Start</h3>
               <p className="text-gray-600">With hundreds of tech careers available, beginners feel overwhelmed and confused about which path to choose.</p>
-            </div>
-            <div className="bg-white p-8 rounded-2xl shadow-sm">
+            </motion.div>
+            <motion.div 
+              initial={{opacity:0, scale:0.5}}
+              whileInView={{opacity:1, scale:1}}
+              transition={{duration:1, type: "spring", delay:0.3}}
+            className="bg-white p-8 rounded-2xl shadow-sm">
               <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mb-6">
                 <svg className="w-8 h-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
@@ -132,8 +150,12 @@ export default function HomePage(){
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-3">Unstructured Learning</h3>
               <p className="text-gray-600">Random YouTube tutorials and scattered resources lead to gaps in knowledge and wasted time.</p>
-            </div>
-            <div className="bg-white p-8 rounded-2xl shadow-sm">
+            </motion.div>
+            <motion.div 
+              initial={{opacity:0, scale:0.5}}
+              whileInView={{opacity:1, scale:1}}
+              transition={{duration:1, type: "spring",delay:0.6}}
+            className="bg-white p-8 rounded-2xl shadow-sm">
               <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mb-6">
                 <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
@@ -141,7 +163,7 @@ export default function HomePage(){
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-3">Lack of Guidance</h3>
               <p className="text-gray-600">Learning alone without mentorship or feedback makes it hard to stay motivated and track progress.</p>
-            </div>
+            </motion.div>
           </div>
         </div>
       </section>
@@ -153,20 +175,28 @@ export default function HomePage(){
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">A simple, proven approach to launch your tech career</p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
-            <div className="relative">
+            <motion.div 
+              initial={{opacity:0, x:-50}}
+              whileInView={{opacity:1, x:0}}
+              transition={{duration:1}}
+            className="relative">
               <div className="bg-gradient-to-br from-[#1e40af] to-blue-600 text-white p-8 rounded-2xl shadow-lg">
-              <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mb-6 text-2xl font-bold">1</div>
-                <h3 className="text-2xl font-bold mb-4">AI Career Recommendation</h3>
-                <p className="text-blue-100 mb-6">Take our smart career quiz and let AI analyze your interests, skills, and goals to recommend the perfect tech path for you.</p>
-                <Image src={Ai} alt="AI Analysis" className="rounded-lg"/>
+                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mb-6 text-2xl font-bold">1</div>
+                  <h3 className="text-2xl font-bold mb-4">AI Career Recommendation</h3>
+                  <p className="text-blue-100 mb-6">Take our smart career quiz and let AI analyze your interests, skills, and goals to recommend the perfect tech path for you.</p>
+                  <Image src={Ai} alt="AI Analysis" className="rounded-lg"/>
+                </div>
+                <div className="hidden md:block absolute top-1/2 -right-4 w-8 h-8 text-[#1e40af]">
+                <svg fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M13.025 1l-2.847 2.828 6.176 6.176h-16.354v3.992h16.354l-6.176 6.176 2.847 2.828 10.975-11z"/>
+                </svg>
               </div>
-              <div className="hidden md:block absolute top-1/2 -right-4 w-8 h-8 text-[#1e40af]">
-              <svg fill="currentColor" viewBox="0 0 24 24">
-                <path d="M13.025 1l-2.847 2.828 6.176 6.176h-16.354v3.992h16.354l-6.176 6.176 2.847 2.828 10.975-11z"/>
-              </svg>
-            </div>
-          </div>
-        <div className="relative">
+            </motion.div>
+        <motion.div 
+          initial={{opacity:0, y:50}}
+              whileInView={{opacity:1, y:0}}
+              transition={{duration:1, delay:0.1}}
+        className="relative">
           <div className="bg-gradient-to-br from-[#7c3aed] to-purple-600 text-white p-8 rounded-2xl shadow-lg">
             <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mb-6 text-2xl font-bold">2</div>
             <h3 className="text-2xl font-bold mb-4">Structured Learning Tracks</h3>
@@ -178,15 +208,19 @@ export default function HomePage(){
               <path d="M13.025 1l-2.847 2.828 6.176 6.176h-16.354v3.992h16.354l-6.176 6.176 2.847 2.828 10.975-11z"/>
             </svg>
           </div>
-        </div>
-        <div>
+        </motion.div>
+        <motion.div
+          initial={{opacity:0, x:50}}
+          whileInView={{opacity:1, x:0}}
+          transition={{duration:1, delay:0.2}}
+        >
           <div className="bg-gradient-to-br from-[#10b981] to-green-600 text-white p-8 rounded-2xl shadow-lg">
             <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center mb-6 text-2xl font-bold">3</div>
               <h3 className="text-2xl font-bold mb-4">Learn with AI or Tutors</h3>
               <p className="text-green-100 mb-6">Get instant help from our AI tutor 24/7, or book sessions with experienced human tutors for personalized guidance.</p>
               <Image src={Tutor} alt="Tutoring" className="rounded-lg"/>
             </div>
-          </div>
+          </motion.div>
         </div>
         </div>
       </section>
@@ -399,34 +433,49 @@ export default function HomePage(){
         <p className="text-xl text-blue-100 max-w-3xl mx-auto">Your journey from beginner to professional in 4 simple steps</p>
         </div>
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-        <div className="text-center">
+        <motion.div className="text-center"
+          initial={{opacity:0}}
+          whileInView={{opacity:1}}
+        >
         <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6 text-3xl font-bold">1</div>
         <div className="bg-white/10 backdrop-blur-sm p-6 rounded-2xl">
         <h3 className="text-xl font-bold mb-3">Take Career Quiz</h3>
         <p className="text-blue-100">Answer questions about your interests, skills, and goals. Our AI analyzes your responses.</p>
         </div>
-        </div>
-        <div className="text-center">
+        </motion.div>
+        <motion.div className="text-center"
+          initial={{opacity:0}}
+          whileInView={{opacity:1}}
+          transition={{delay:0.3}}
+        >
         <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6 text-3xl font-bold">2</div>
         <div className="bg-white/10 backdrop-blur-sm p-6 rounded-2xl">
         <h3 className="text-xl font-bold mb-3">Get Personalized Path</h3>
         <p className="text-blue-100">Receive AI-recommended learning tracks matched to your profile and career aspirations.</p>
         </div>
-        </div>
-        <div className="text-center">
+        </motion.div>
+        <motion.div className="text-center"
+          initial={{opacity:0}}
+          whileInView={{opacity:1}}
+          transition={{delay:0.6, type: "spring"}}
+        >
         <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6 text-3xl font-bold">3</div>
         <div className="bg-white/10 backdrop-blur-sm p-6 rounded-2xl">
         <h3 className="text-xl font-bold mb-3">Learn & Practice</h3>
         <p className="text-blue-100">Follow structured curriculum, complete projects, and get help from AI or human tutors.</p>
         </div>
-        </div>
-        <div className="text-center">
+        </motion.div>
+        <motion.div className="text-center"
+          initial={{opacity:0}}
+          whileInView={{opacity:1}}
+          transition={{delay:0.9, type: "spring"}}
+        >
         <div className="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6 text-3xl font-bold">4</div>
         <div className="bg-white/10 backdrop-blur-sm p-6 rounded-2xl">
         <h3 className="text-xl font-bold mb-3">Land Your Job</h3>
         <p className="text-blue-100">Build portfolio, earn certificates, and apply to jobs through our exclusive job board.</p>
         </div>
-        </div>
+        </motion.div>
         </div>
         <div className="mt-16 text-center">
         <Link href="/register"><button className="bg-white text-[#1e40af] px-10 py-4 rounded-xl hover:bg-gray-100 transition font-bold text-lg shadow-xl">Start Your Journey Now</button></Link>
