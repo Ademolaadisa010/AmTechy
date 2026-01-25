@@ -93,7 +93,6 @@ export default function Dashboard() {
 
   const fetchUserStats = async (userId: string) => {
     try {
-      // Fetch progress records
       const progressQuery = query(
         collection(db, "progress"),
         where("userId", "==", userId)
@@ -115,7 +114,6 @@ export default function Dashboard() {
         }
       });
 
-      // Fetch certificates
       const certificatesQuery = query(
         collection(db, "certificates"),
         where("userId", "==", userId)
@@ -147,7 +145,6 @@ export default function Dashboard() {
 
   const fetchCourseProgress = async (userId: string) => {
     try {
-      // Query without orderBy to avoid needing composite index
       const enrollmentsQuery = query(
         collection(db, "enrollments"),
         where("learnerId", "==", userId)
@@ -159,7 +156,6 @@ export default function Dashboard() {
       for (const enrollDoc of enrollmentsSnapshot.docs) {
         const enrollment = enrollDoc.data();
         
-        // Fetch course details
         const courseDoc = await getDoc(doc(db, "courses", enrollment.courseId));
         if (courseDoc.exists()) {
           const courseData = courseDoc.data();
@@ -409,7 +405,7 @@ export default function Dashboard() {
                 </p>
 
                 <button 
-                  onClick={() => router.push("/findTutor")}
+                  onClick={() => router.push("/find-tutor")}
                   className="w-full py-2 bg-white text-indigo-900 text-sm font-bold rounded-lg hover:bg-indigo-50 transition-colors"
                 >
                   Find a Mentor
@@ -418,7 +414,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Recent Courses */}
           {allCourses.length > 1 && (
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
               <h3 className="font-bold text-lg text-slate-900 mb-6">Recent Courses</h3>
