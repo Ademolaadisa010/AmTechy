@@ -31,7 +31,7 @@ export default function RootLayout({
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
       </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased overflow-x-hidden`}
       >
         {children}
       </body>
