@@ -82,7 +82,7 @@ export default function Register() {
         authProvider: "email",
       });
 
-      router.push(role === "learner" ? "/onboarding" : "/tutor-dashboard");
+      router.push(role === "learner" ? "/onboarding" : "/tutor/apply");
     } catch (err: any) {
       console.error("Registration error:", err);
       switch (err.code) {
