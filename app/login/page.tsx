@@ -16,7 +16,6 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Email & Password Login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -69,7 +68,6 @@ export default function Login() {
         </div>
       </div>
 
-      {/* RIGHT SIDE */}
       <div className="w-full md:w-1/2 flex items-center justify-center p-6 md:p-12">
         <div className="w-full max-w-md space-y-8">
           <div>
@@ -77,7 +75,6 @@ export default function Login() {
             <p className="mt-2 text-slate-600">Continue your tech journey...</p>
           </div>
 
-          {/* FORM */}
           <form onSubmit={handleLogin} className="space-y-6">
             <div className="space-y-4">
               <div>
@@ -129,7 +126,6 @@ export default function Login() {
             </Link>
           </p>
 
-          {/* SOCIAL LOGIN */}
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-slate-200" />
