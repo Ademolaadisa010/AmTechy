@@ -435,7 +435,7 @@ export default function ApplicationStatus() {
         {/* Actions */}
         <div className="flex justify-center gap-4 mt-8">
           <button
-            onClick={() => router.push("/dashboard")}
+            onClick={() => router.push("/tutor/dashboard")}
             className="px-6 py-3 border border-slate-200 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition-colors"
           >
             <i className="fa-solid fa-home mr-2"></i>
