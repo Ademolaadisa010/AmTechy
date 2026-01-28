@@ -241,7 +241,7 @@ export default function SeedCoursesPage() {
       tutorName: "Dr. Lisa Park",
       status: "published",
       totalModules: 22,
-      price: 89.99,
+      price: "free",
       rating: 4.9,
       studentsEnrolled: 2567,
       level: "advanced",

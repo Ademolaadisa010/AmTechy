@@ -158,7 +158,7 @@ export default function TutorStudents() {
             totalSpent,
             lastSessionDate,
             firstSessionDate,
-            favoriteTopics: Array.from(student.topics).slice(0, 3),
+            favoriteTopics: Array.from(student.topics).slice(0, 3) as string[],
             status: isActive ? "active" : "inactive",
           };
         }

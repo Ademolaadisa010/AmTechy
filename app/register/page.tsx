@@ -14,7 +14,7 @@ import {
 } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, getDoc } from "firebase/firestore";
 
 export default function Register() {
   const [role, setRole] = useState<"learner" | "tutor">("learner");
@@ -65,40 +65,56 @@ export default function Register() {
         return;
       }
 
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        formData.email,
-        formData.password
-      );
+      // Check if email already exists before creating account
+      try {
+        const userCredential = await createUserWithEmailAndPassword(
+          auth,
+          formData.email,
+          formData.password
+        );
 
-      await updateProfile(userCredential.user, {
-        displayName: formData.fullName,
-      });
+        await updateProfile(userCredential.user, {
+          displayName: formData.fullName,
+        });
 
-      await saveUserToFirestore(userCredential.user.uid, {
-        fullName: formData.fullName,
-        email: formData.email,
-        role: role,
-        authProvider: "email",
-      });
+        await saveUserToFirestore(userCredential.user.uid, {
+          fullName: formData.fullName,
+          email: formData.email,
+          role: role,
+          authProvider: "email",
+        });
 
-      router.push(role === "learner" ? "/onboarding" : "/tutor/apply");
+        // Redirect based on role
+        if (role === "learner") {
+          router.push("/dashboard");
+        } else {
+          router.push("/tutor/apply");
+        }
+      } catch (authError: any) {
+        // Handle Firebase auth errors
+        console.log("Firebase Auth Error:", authError.code); // For debugging
+        
+        switch (authError.code) {
+          case "auth/email-already-in-use":
+            setError("This email is already registered. Please login instead or use a different email.");
+            break;
+          case "auth/invalid-email":
+            setError("Invalid email address");
+            break;
+          case "auth/weak-password":
+            setError("Password is too weak. Use at least 6 characters.");
+            break;
+          case "auth/operation-not-allowed":
+            setError("Email/password accounts are not enabled. Please contact support.");
+            break;
+          default:
+            setError(`Registration failed: ${authError.message}`);
+        }
+        setLoading(false);
+      }
     } catch (err: any) {
       console.error("Registration error:", err);
-      switch (err.code) {
-        case "auth/email-already-in-use":
-          setError("This email is already registered");
-          break;
-        case "auth/invalid-email":
-          setError("Invalid email address");
-          break;
-        case "auth/weak-password":
-          setError("Password is too weak");
-          break;
-        default:
-          setError("Registration failed. Please try again.");
-      }
-    } finally {
+      setError("An unexpected error occurred. Please try again.");
       setLoading(false);
     }
   };
@@ -111,21 +127,59 @@ export default function Register() {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
 
-      await saveUserToFirestore(result.user.uid, {
-        fullName: result.user.displayName || "Google User",
-        email: result.user.email,
-        role: role,
-        authProvider: "google",
-        photoURL: result.user.photoURL,
-      });
+      // Check if user already exists
+      const userDoc = await getDoc(doc(db, "users", result.user.uid));
+      
+      if (userDoc.exists()) {
+        // User exists - check their role and redirect accordingly
+        const userData = userDoc.data();
+        
+        // Check if they're a tutor
+        const tutorProfileDoc = await getDoc(doc(db, "tutor_profiles", result.user.uid));
+        
+        if (tutorProfileDoc.exists()) {
+          router.push("/tutor/dashboard");
+        } else {
+          router.push("/dashboard");
+        }
+      } else {
+        // New user - save to Firestore with selected role
+        await saveUserToFirestore(result.user.uid, {
+          fullName: result.user.displayName || "Google User",
+          email: result.user.email,
+          role: role,
+          authProvider: "google",
+          photoURL: result.user.photoURL,
+        });
 
-      router.push(role === "learner" ? "/dashboard" : "/tutor-dashboard");
+        // Redirect based on role
+        if (role === "learner") {
+          router.push("/dashboard");
+        } else {
+          router.push("/tutor/apply");
+        }
+      }
     } catch (err: any) {
-      console.error("Google sign-in error:", err);
+      // Only log unexpected errors to console
+      if (err.code !== "auth/popup-closed-by-user" && 
+          err.code !== "auth/account-exists-with-different-credential" &&
+          err.code !== "auth/operation-not-allowed") {
+        console.error("Google sign-in error:", err);
+      }
+      
       if (err.code === "auth/popup-closed-by-user") {
         setError("Sign-in cancelled");
+      } else if (err.code === "auth/account-exists-with-different-credential") {
+        const email = err.customData?.email;
+        setError(
+          email 
+            ? `An account with ${email} already exists. Please sign in using the method you originally used (GitHub, Email, etc.) or contact support to link your accounts.`
+            : "An account already exists with this email. Please sign in using your original method (GitHub or Email/Password)."
+        );
+      } else if (err.code === "auth/operation-not-allowed") {
+        setError("Google sign-in is not enabled. Please contact support.");
       } else {
-        setError("Google sign-in failed. Please try again.");
+        setError("Google sign-in failed. Please try again or use a different sign-in method.");
       }
     } finally {
       setLoading(false);
@@ -140,23 +194,60 @@ export default function Register() {
       const provider = new GithubAuthProvider();
       const result = await signInWithPopup(auth, provider);
 
-      await saveUserToFirestore(result.user.uid, {
-        fullName: result.user.displayName || "GitHub User",
-        email: result.user.email,
-        role: role,
-        authProvider: "github",
-        photoURL: result.user.photoURL,
-      });
+      // Check if user already exists
+      const userDoc = await getDoc(doc(db, "users", result.user.uid));
+      
+      if (userDoc.exists()) {
+        // User exists - check their role and redirect accordingly
+        const userData = userDoc.data();
+        
+        // Check if they're a tutor
+        const tutorProfileDoc = await getDoc(doc(db, "tutor_profiles", result.user.uid));
+        
+        if (tutorProfileDoc.exists()) {
+          router.push("/tutor/dashboard");
+        } else {
+          router.push("/dashboard");
+        }
+      } else {
+        // New user - save to Firestore with selected role
+        await saveUserToFirestore(result.user.uid, {
+          fullName: result.user.displayName || "GitHub User",
+          email: result.user.email,
+          role: role,
+          authProvider: "github",
+          photoURL: result.user.photoURL,
+        });
 
-      router.push(role === "learner" ? "/dashboard" : "/tutor-dashboard");
+        // Redirect based on role
+        if (role === "learner") {
+          router.push("/dashboard");
+        } else {
+          router.push("/tutor/apply");
+        }
+      }
     } catch (err: any) {
-      console.error("GitHub sign-in error:", err);
+      // Only log unexpected errors to console
+      if (err.code !== "auth/popup-closed-by-user" && 
+          err.code !== "auth/account-exists-with-different-credential" &&
+          err.code !== "auth/operation-not-allowed") {
+        console.error("GitHub sign-in error:", err);
+      }
+      
       if (err.code === "auth/popup-closed-by-user") {
         setError("Sign-in cancelled");
       } else if (err.code === "auth/account-exists-with-different-credential") {
-        setError("An account already exists with this email");
+        // Get the email from the error
+        const email = err.customData?.email;
+        setError(
+          email 
+            ? `An account with ${email} already exists. Please sign in using the method you originally used (Google, Email, etc.) or contact support to link your accounts.`
+            : "An account already exists with this email. Please sign in using your original method (Google or Email/Password)."
+        );
+      } else if (err.code === "auth/operation-not-allowed") {
+        setError("GitHub sign-in is not enabled. Please contact support.");
       } else {
-        setError("GitHub sign-in failed. Please try again.");
+        setError("GitHub sign-in failed. Please try again or use a different sign-in method.");
       }
     } finally {
       setLoading(false);
@@ -232,8 +323,9 @@ export default function Register() {
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-                {error}
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start gap-2">
+                <i className="fa-solid fa-circle-exclamation mt-0.5"></i>
+                <span className="flex-1">{error}</span>
               </div>
             )}
 
@@ -337,9 +429,9 @@ export default function Register() {
               </button>
             </form>
 
-            <p className="text-black">
+            <p className="text-black text-center">
               Already Have an Account?{" "}
-              <Link href="/login" className="text-[#312e81] hover:underline">
+              <Link href="/login" className="text-[#312e81] hover:underline font-semibold">
                 Login
               </Link>
             </p>
@@ -359,7 +451,7 @@ export default function Register() {
               <button
                 onClick={handleGoogleSignIn}
                 disabled={loading}
-                className="flex items-center justify-center px-4 py-2 border border-slate-300 rounded-lg shadow-sm bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center justify-center px-4 py-2 border border-slate-300 rounded-lg shadow-sm bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
                   <path
@@ -372,7 +464,7 @@ export default function Register() {
               <button
                 onClick={handleGitHubSignIn}
                 disabled={loading}
-                className="flex items-center justify-center px-4 py-2 border border-slate-300 rounded-lg shadow-sm bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center justify-center px-4 py-2 border border-slate-300 rounded-lg shadow-sm bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg
                   className="h-5 w-5 mr-2"
