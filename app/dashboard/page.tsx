@@ -17,6 +17,7 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
+import BottomBar from "../bottom-bar/page";
 
 interface UserData {
   fullName: string;
@@ -226,7 +227,7 @@ export default function Dashboard() {
             <i className="fa-solid fa-bell w-6 h-6"></i>
           </button>
         </header>
-
+        <BottomBar/>
         <div className="space-y-8 animate-fade-in">
           {/* Welcome Section */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
