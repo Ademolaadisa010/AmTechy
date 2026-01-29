@@ -20,6 +20,7 @@ import {
   arrayRemove,
   where,
 } from "firebase/firestore";
+import BottomBar from "../bottom-bar/page";
 
 interface Post {
   id: string;
@@ -255,6 +256,7 @@ export default function Community() {
             <h1 className="text-3xl font-bold text-slate-900">Community</h1>
             <p className="text-slate-600 mt-1">Connect, share, and learn together</p>
           </div>
+          <BottomBar/>
 
           {/* Tabs */}
           <div className="mb-6 border-b border-slate-200">

@@ -13,6 +13,7 @@ import {
   doc, 
   getDoc 
 } from "firebase/firestore";
+import BottomBar from "../bottom-bar/page";
 
 interface Course {
   id: string;
@@ -159,6 +160,7 @@ export default function MyLearning() {
               </button>
             </div>
 
+            <BottomBar/>
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white p-4 rounded-xl border border-slate-200">

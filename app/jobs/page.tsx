@@ -15,6 +15,7 @@ import {
   addDoc,
   orderBy,
 } from "firebase/firestore";
+import BottomBar from "../bottom-bar/page";
 
 interface Job {
   id: string;
@@ -262,6 +263,7 @@ export default function JobsAndInternships() {
                 Find opportunities that match your skills and career goals
               </p>
             </div>
+            <BottomBar/>
 
             {/* Search Bar */}
             <div className="relative">

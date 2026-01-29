@@ -13,6 +13,7 @@ import {
   doc,
   getDoc,
 } from "firebase/firestore";
+import BottomBar from "../bottom-bar/page";
 
 interface Course {
   id: string;
@@ -174,6 +175,7 @@ export default function Progress() {
             <h1 className="text-3xl font-bold text-slate-900">My Progress</h1>
             <p className="text-slate-600 mt-1">Track your learning journey and achievements</p>
           </div>
+          <BottomBar/>
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

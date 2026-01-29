@@ -13,6 +13,7 @@ import {
   doc,
   getDoc,
 } from "firebase/firestore";
+import BottomBar from "../bottom-bar/page";
 
 interface Certificate {
   id: string;
@@ -215,7 +216,7 @@ export default function Certificates() {
           </div>
         </div>
       </div>
-
+      <BottomBar/>
       <div className="flex gap-4 mt-6">
         <button
           onClick={() => handleDownload(certificate)}

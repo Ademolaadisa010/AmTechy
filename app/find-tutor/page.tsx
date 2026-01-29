@@ -13,6 +13,7 @@ import {
   doc,
   getDoc,
 } from "firebase/firestore";
+import BottomBar from "../bottom-bar/page";
 
 interface Tutor {
   id: string;
@@ -201,7 +202,7 @@ export default function FindTutor() {
               </div>
             </div>
           </div>
-
+          <BottomBar/>
           {recommendedTutors.length > 0 && (
             <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6 border border-indigo-100">
               <div className="flex items-center gap-2 mb-4">
