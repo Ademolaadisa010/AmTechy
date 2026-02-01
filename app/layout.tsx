@@ -13,8 +13,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AmTechy - EdTech Platform",
-  description: "Help beginners who want to learn tech but don’t know where to start, using AI-powered career guidance and structured learning paths.",
+  title: "AmTechy - AI-Powered Learning Platform | Find Your Tech Career Path",
+  description: "Break into tech with AI-guided learning. Personalized paths from beginner to professional. Learn coding, data science & more. Start free today.",
+  verification: {
+    google: 'T4XmAA63JnamZFAL2CvdheEmOoBCyweaj_pohJH58Nc',
+  },
 };
 
 export default function RootLayout({
@@ -27,7 +30,6 @@ export default function RootLayout({
       <head>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css"/>
         <script src="https://unpkg.com/lucide@latest"></script>
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
       </head>
       <body

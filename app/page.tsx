@@ -2,6 +2,7 @@
 import Image from "next/image";
 import { motion } from "framer-motion";
 import Hero from "@/public/hero.jpg";
+import Logo from "@/public/logo.svg";
 import HeroSec from "@/public/hero-sec.jpg";
 import two from "@/public/two.jpg";
 import Ai from "@/public/ai.jpg";
@@ -21,13 +22,14 @@ export default function HomePage(){
         initial={{y:-50, opacity:0}}
         whileInView={{y:0, opacity:1}}
         transition={{duration:1}}
-      className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50">
+        className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-2">
-              <div className="w-10 h-10 bg-gradient-to-br from-[#1e40af] to-[#7c3aed] rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold text-xl">A</span>
-              </div>
+              {/* <div className="w-10 h-10 bg-gradient-to-br from-[#1e40af] to-[#7c3aed] rounded-lg flex items-center justify-center"> */}
+                {/* <span className="text-white font-bold text-xl">A</span> */}
+                <Image src={Logo} width={50} alt="logo" />
+              {/* </div> */}
             <span className="text-xl font-bold text-gray-900">AmTechy</span>
           </div>
           <div className="hidden md:flex items-center space-x-8">
