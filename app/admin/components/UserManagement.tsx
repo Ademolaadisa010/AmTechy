@@ -12,7 +12,6 @@ import {
   updateDoc,
   deleteDoc,
   serverTimestamp,
-  getDoc,
 } from "firebase/firestore";
 
 interface User {
@@ -46,12 +45,28 @@ export default function UserManagement({ onUpdate }: UserManagementProps) {
   const fetchUsers = async () => {
     setLoading(true);
     try {
+      // Check authentication first
+      const { auth } = await import('@/lib/firebase');
+      const currentUser = auth.currentUser;
+      
+      if (!currentUser) {
+        console.error('❌ User is not authenticated');
+        alert('You must be logged in to view users');
+        setLoading(false);
+        return;
+      }
+      
+      console.log('✅ User authenticated:', currentUser.email);
+      
       const usersQuery = query(
         collection(db, "users"),
         orderBy("createdAt", "desc"),
         limit(200)
       );
+      
+      console.log('🔄 Fetching users...');
       const snapshot = await getDocs(usersQuery);
+      console.log('✅ Fetched', snapshot.docs.length, 'users');
       
       const usersData: User[] = snapshot.docs.map((doc) => ({
         id: doc.id,
@@ -65,9 +80,16 @@ export default function UserManagement({ onUpdate }: UserManagementProps) {
       }));
       
       setUsers(usersData);
-    } catch (error) {
-      console.error("Error fetching users:", error);
-      alert("Failed to fetch users.");
+    } catch (error: any) {
+      console.error("❌ Error fetching users:", error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      
+      if (error.code === 'permission-denied') {
+        alert('Permission denied. You need admin access to view users.\n\nPlease check:\n1. You are logged in\n2. Firestore rules allow user access\n3. You have admin role');
+      } else {
+        alert('Failed to fetch users: ' + error.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -85,9 +107,13 @@ export default function UserManagement({ onUpdate }: UserManagementProps) {
       alert("User suspended successfully!");
       await fetchUsers();
       if (onUpdate) onUpdate();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error suspending user:", error);
-      alert("Failed to suspend user.");
+      if (error.code === 'permission-denied') {
+        alert('Permission denied. You need admin access to suspend users.');
+      } else {
+        alert('Failed to suspend user: ' + error.message);
+      }
     } finally {
       setProcessing(false);
     }
@@ -103,9 +129,13 @@ export default function UserManagement({ onUpdate }: UserManagementProps) {
       alert("User activated successfully!");
       await fetchUsers();
       if (onUpdate) onUpdate();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error activating user:", error);
-      alert("Failed to activate user.");
+      if (error.code === 'permission-denied') {
+        alert('Permission denied. You need admin access to activate users.');
+      } else {
+        alert('Failed to activate user: ' + error.message);
+      }
     } finally {
       setProcessing(false);
     }
@@ -123,9 +153,13 @@ export default function UserManagement({ onUpdate }: UserManagementProps) {
       await fetchUsers();
       if (onUpdate) onUpdate();
       setShowUserModal(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error deleting user:", error);
-      alert("Failed to delete user.");
+      if (error.code === 'permission-denied') {
+        alert('Permission denied. You need admin access to delete users.');
+      } else {
+        alert('Failed to delete user: ' + error.message);
+      }
     } finally {
       setProcessing(false);
     }
@@ -143,9 +177,13 @@ export default function UserManagement({ onUpdate }: UserManagementProps) {
       alert("User role updated successfully!");
       await fetchUsers();
       if (onUpdate) onUpdate();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error changing role:", error);
-      alert("Failed to change user role.");
+      if (error.code === 'permission-denied') {
+        alert('Permission denied. You need admin access to change user roles.');
+      } else {
+        alert('Failed to change user role: ' + error.message);
+      }
     } finally {
       setProcessing(false);
     }
