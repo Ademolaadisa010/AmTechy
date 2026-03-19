@@ -389,18 +389,24 @@ export default function ApplicationReview({ onUpdate }: ApplicationReviewProps) 
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-1 max-w-xs">
-                      {/* {app.expertise.slice(0, 2).map((skill, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-800 rounded-full"
-                        >
-                          {skill}
-                        </span>
-                      ))} */}
-                      {app.expertise.length > 2 && (
-                        <span className="px-2 py-1 text-xs font-medium bg-slate-100 text-slate-600 rounded-full">
-                          +{app.expertise.length - 2} more
-                        </span>
+                      {Array.isArray(app.expertise) && app.expertise.length > 0 ? (
+                        <>
+                          {app.expertise.slice(0, 2).map((skill, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-800 rounded-full"
+                            >
+                              {skill}
+                            </span>
+                          ))}
+                          {app.expertise.length > 2 && (
+                            <span className="px-2 py-1 text-xs font-medium bg-slate-100 text-slate-600 rounded-full">
+                              +{app.expertise.length - 2} more
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-sm text-slate-500 italic">No expertise listed</span>
                       )}
                     </div>
                   </td>
@@ -532,14 +538,18 @@ export default function ApplicationReview({ onUpdate }: ApplicationReviewProps) 
                     Expertise
                   </h4>
                   <div className="flex flex-wrap gap-2">
-                    {selectedApp.expertise.map((skill, idx) => (
-                      <span
-                        key={idx}
-                        className="px-3 py-1.5 bg-indigo-100 text-indigo-800 rounded-lg text-sm font-medium"
-                      >
-                        {skill}
-                      </span>
-                    ))}
+                    {Array.isArray(selectedApp.expertise) && selectedApp.expertise.length > 0 ? (
+                      selectedApp.expertise.map((skill, idx) => (
+                        <span
+                          key={idx}
+                          className="px-3 py-1.5 bg-indigo-100 text-indigo-800 rounded-lg text-sm font-medium"
+                        >
+                          {skill}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-sm text-slate-500 italic">No expertise listed</span>
+                    )}
                   </div>
                 </div>
 

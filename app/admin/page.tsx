@@ -13,12 +13,12 @@ import {
   limit,
 } from "firebase/firestore";
 
-// Import components
 import UserManagement from "./components/UserManagement";
 import ApplicationReview from "./components/ApplicationReview";
 import ContentModeration from "./components/ContentModeration";
 import Analytics from "./components/Analytics";
 import BookingManagement from "./components/BookingManagement";
+import CourseManagement from "./components/CourseManagement";
 
 interface AdminStats {
   totalUsers: number;
@@ -158,6 +158,7 @@ export default function AdminDashboard() {
           <nav className="space-y-2">
             {[
               { id: "overview", icon: "fa-chart-line", label: "Overview" },
+              { id: "courses", icon: "fa-book", label: "Courses" },
               { id: "users", icon: "fa-users", label: "Users" },
               { id: "applications", icon: "fa-file-lines", label: "Applications", badge: stats.pendingApplications },
               { id: "bookings", icon: "fa-calendar-check", label: "Bookings" },
@@ -388,7 +389,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Other Tabs - Render Components */}
+        {activeTab === "courses" && <CourseManagement />}
         {activeTab === "users" && <UserManagement onUpdate={refreshData} />}
         {activeTab === "applications" && <ApplicationReview onUpdate={refreshData} />}
         {activeTab === "bookings" && <BookingManagement onUpdate={refreshData} />}

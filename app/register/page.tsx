@@ -15,6 +15,7 @@ import {
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, getDoc } from "firebase/firestore";
+import Logo from "@/public/logo.svg";
 
 export default function Register() {
   const [role, setRole] = useState<"learner" | "tutor">("learner");
@@ -65,7 +66,6 @@ export default function Register() {
         return;
       }
 
-      // Check if email already exists before creating account
       try {
         const userCredential = await createUserWithEmailAndPassword(
           auth,
@@ -84,15 +84,13 @@ export default function Register() {
           authProvider: "email",
         });
 
-        // Redirect based on role
         if (role === "learner") {
-          router.push("/dashboard");
+          router.push("/onboarding");
         } else {
           router.push("/tutor/apply");
         }
       } catch (authError: any) {
-        // Handle Firebase auth errors
-        console.log("Firebase Auth Error:", authError.code); // For debugging
+        console.log("Firebase Auth Error:", authError.code);
         
         switch (authError.code) {
           case "auth/email-already-in-use":
@@ -127,20 +125,17 @@ export default function Register() {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
 
-      // Check if user already exists
       const userDoc = await getDoc(doc(db, "users", result.user.uid));
       
       if (userDoc.exists()) {
-        // User exists - check their role and redirect accordingly
         const userData = userDoc.data();
         
-        // Check if they're a tutor
         const tutorProfileDoc = await getDoc(doc(db, "tutor_profiles", result.user.uid));
         
         if (tutorProfileDoc.exists()) {
           router.push("/tutor/dashboard");
         } else {
-          router.push("/dashboard");
+          router.push("/onboarding");
         }
       } else {
         // New user - save to Firestore with selected role
@@ -154,7 +149,7 @@ export default function Register() {
 
         // Redirect based on role
         if (role === "learner") {
-          router.push("/dashboard");
+          router.push("/onboarding");
         } else {
           router.push("/tutor/apply");
         }
@@ -207,7 +202,7 @@ export default function Register() {
         if (tutorProfileDoc.exists()) {
           router.push("/tutor/dashboard");
         } else {
-          router.push("/dashboard");
+          router.push("/onboarding");
         }
       } else {
         // New user - save to Firestore with selected role
@@ -221,7 +216,7 @@ export default function Register() {
 
         // Redirect based on role
         if (role === "learner") {
-          router.push("/dashboard");
+          router.push("/onboarding");
         } else {
           router.push("/tutor/apply");
         }
@@ -271,9 +266,7 @@ export default function Register() {
           </div>
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-8">
-              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-[#4f46e5] font-bold text-xl">
-                A
-              </div>
+              <Image src={Logo} alt="logo" width={50} />
               <span className="text-2xl font-bold tracking-tight">
                 AmTechy
               </span>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
@@ -20,10 +20,26 @@ interface CourseData {
   category: string;
 }
 
+interface LessonData {
+  id: string;
+  title: string;
+  description: string;
+  videoUrl: string;
+  videoDuration?: number | undefined;
+  objectives: string[];
+  codeExample: string;
+  content?: string;
+}
+
 interface Enrollment {
   id: string;
   progress: number;
   currentModule: number;
+}
+
+interface AIMessage {
+  role: "user" | "assistant";
+  content: string;
 }
 
 export default function LessonPlayer() {
@@ -34,16 +50,29 @@ export default function LessonPlayer() {
 
   const [loading, setLoading] = useState(true);
   const [course, setCourse] = useState<CourseData | null>(null);
+  const [lesson, setLesson] = useState<LessonData | null>(null);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [showAIChat, setShowAIChat] = useState(false);
-  const [aiMessages, setAiMessages] = useState<Array<{ role: string; content: string }>>([]);
+  const [aiMessages, setAiMessages] = useState<AIMessage[]>([]);
   const [userMessage, setUserMessage] = useState("");
   const [isAIThinking, setIsAIThinking] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to latest message
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [aiMessages, isAIThinking]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         await fetchCourseData();
+        await fetchLessonData();
         await fetchEnrollment(user.uid);
         setLoading(false);
       } else {
@@ -52,7 +81,7 @@ export default function LessonPlayer() {
     });
 
     return () => unsubscribe();
-  }, [courseId, router]);
+  }, [courseId, lessonId, router]);
 
   const fetchCourseData = async () => {
     try {
@@ -67,6 +96,44 @@ export default function LessonPlayer() {
       }
     } catch (error) {
       console.error("Error fetching course:", error);
+    }
+  };
+
+  const fetchLessonData = async () => {
+    try {
+      // Get lesson from Firestore - REQUIRED
+      const lessonDoc = await getDoc(
+        doc(db, "courses", courseId, "lessons", `lesson_${lessonId}`)
+      );
+
+      if (lessonDoc.exists()) {
+        const data = lessonDoc.data();
+        
+        // Validate that videoUrl exists in database
+        if (!data.videoUrl) {
+          console.warn(`Lesson ${lessonId} exists but has no videoUrl in database`);
+          setLesson(null);
+          return;
+        }
+
+        setLesson({
+          id: lessonDoc.id,
+          title: data.title || `Module ${lessonId}`,
+          description: data.description || "Lesson content",
+          videoUrl: data.videoUrl, // ONLY from database
+          videoDuration: data.videoDuration ? parseInt(data.videoDuration) : undefined,
+          objectives: Array.isArray(data.objectives) ? data.objectives : [],
+          codeExample: data.codeExample || "",
+          content: data.content || "",
+        });
+      } else {
+        // Lesson not found in database
+        console.error(`Lesson ${lessonId} not found in database for course ${courseId}`);
+        setLesson(null);
+      }
+    } catch (error) {
+      console.error("Error fetching lesson:", error);
+      setLesson(null);
     }
   };
 
@@ -105,7 +172,6 @@ export default function LessonPlayer() {
         lastAccessed: new Date(),
       });
 
-      // Update progress collection
       const progressQuery = query(
         collection(db, "progress"),
         where("userId", "==", auth.currentUser?.uid),
@@ -118,7 +184,10 @@ export default function LessonPlayer() {
         await updateDoc(doc(db, "progress", progressDoc.id), {
           progress: newProgress,
           lastAccessed: new Date(),
-          completedLessons: [...(progressDoc.data().completedLessons || []), `lesson${lessonId}`],
+          completedLessons: [
+            ...(progressDoc.data().completedLessons || []),
+            `lesson${lessonId}`,
+          ],
           updatedAt: new Date().toISOString(),
         });
       }
@@ -135,55 +204,85 @@ export default function LessonPlayer() {
   };
 
   const handleSendAIMessage = async () => {
-    if (!userMessage.trim()) return;
+    if (!userMessage.trim() || isAIThinking) return;
 
-    const newMessages = [...aiMessages, { role: "user", content: userMessage }];
+    const newMessages: AIMessage[] = [
+      ...aiMessages,
+      { role: "user", content: userMessage },
+    ];
     setAiMessages(newMessages);
     setUserMessage("");
     setIsAIThinking(true);
+    setAiError(null);
 
-    // Simulate AI response (replace with actual API call to Claude)
-    setTimeout(() => {
-      const responses = [
-        "Great question! Let me explain that concept in simpler terms...",
-        "I can help you with that! Here's what you need to understand...",
-        "That's an important topic. Let me break it down for you...",
-      ];
+    try {
+      const response = await fetch("/api/ai-tutor", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: newMessages.map((msg) => ({
+            role: msg.role,
+            content: msg.content,
+          })),
+          courseTitle: course?.title,
+          lessonTitle: lesson?.title,
+          category: course?.category,
+        }),
+      });
 
-      setAiMessages([
-        ...newMessages,
+      if (!response.ok) {
+        throw new Error("Failed to get response from AI");
+      }
+
+      // Handle streaming response
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let aiResponse = "";
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value);
+          aiResponse += chunk;
+
+          // Update UI with streaming response
+          setAiMessages((prev) => {
+            const updatedMessages = [...prev];
+            if (
+              updatedMessages[updatedMessages.length - 1]?.role === "assistant"
+            ) {
+              updatedMessages[updatedMessages.length - 1].content = aiResponse;
+            } else {
+              updatedMessages.push({ role: "assistant", content: aiResponse });
+            }
+            return updatedMessages;
+          });
+        }
+      }
+
+      setIsAIThinking(false);
+    } catch (error) {
+      console.error("Error sending message to AI:", error);
+      setAiError("Failed to get response. Please try again.");
+      setIsAIThinking(false);
+
+      // Add error message to chat
+      setAiMessages((prev) => [
+        ...prev,
         {
-          role: "ai",
-          content: responses[Math.floor(Math.random() * responses.length)],
+          role: "assistant",
+          content:
+            "Sorry, I encountered an error. Please try again in a moment.",
         },
       ]);
-      setIsAIThinking(false);
-    }, 1500);
+    }
   };
 
-  const getLessonContent = () => {
-    // This would normally come from Firestore, but for now we'll generate it
-    return {
-      title: `Module ${lessonId}: Core Concepts`,
-      videoUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ", // Replace with actual video
-      description: `In this module, you'll learn essential ${course?.category} concepts that will help you build real-world applications.`,
-      objectives: [
-        "Understand fundamental concepts",
-        "Apply knowledge through practice",
-        "Build a mini-project",
-        "Master best practices",
-      ],
-      codeExample: `// Example code for Module ${lessonId}
-function example() {
-  console.log("Hello, World!");
-  return "Learning is fun!";
-}
-
-example();`,
-    };
-  };
-
-  if (loading || !course || !enrollment) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
@@ -194,7 +293,42 @@ example();`,
     );
   }
 
-  const lessonContent = getLessonContent();
+  // Check if lesson exists in database
+  if (!lesson || !lesson.videoUrl) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="max-w-md mx-auto text-center bg-white p-8 rounded-lg shadow-lg">
+          <div className="mb-4">
+            <i className="fa-solid fa-triangle-exclamation text-4xl text-red-600 mb-4"></i>
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">
+            Lesson Not Found
+          </h2>
+          <p className="text-slate-600 mb-6">
+            The lesson content for Module {lessonId} is not available in the database. 
+            Please contact your instructor to add this lesson.
+          </p>
+          <button
+            onClick={() => router.push(`/course/${courseId}`)}
+            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            Back to Course
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!course || !enrollment) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-600">Loading course information...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -248,49 +382,76 @@ example();`,
             {/* Video Player */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
               <div className="aspect-video bg-slate-900">
-                <iframe
-                  className="w-full h-full"
-                  src={lessonContent.videoUrl}
-                  title="Lesson Video"
-                  allowFullScreen
-                ></iframe>
+                {lesson.videoUrl ? (
+                  <iframe
+                    className="w-full h-full"
+                    src={lesson.videoUrl}
+                    title="Lesson Video"
+                    allowFullScreen
+                  ></iframe>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <p className="text-slate-400">Video not available</p>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Lesson Details */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
               <h2 className="text-2xl font-bold text-slate-900 mb-4">
-                {lessonContent.title}
+                {lesson.title}
               </h2>
-              <p className="text-slate-600 mb-6">{lessonContent.description}</p>
+              <p className="text-slate-600 mb-6">{lesson.description}</p>
 
               <h3 className="text-lg font-bold text-slate-900 mb-3">
                 Learning Objectives
               </h3>
               <ul className="space-y-2 mb-6">
-                {lessonContent.objectives.map((obj, index) => (
+                {lesson.objectives.map((obj, index) => (
                   <li key={index} className="flex items-start gap-2">
                     <i className="fa-solid fa-check text-green-600 mt-1"></i>
                     <span className="text-slate-700">{obj}</span>
                   </li>
                 ))}
               </ul>
+
+              {lesson.content && (
+                <div className="mt-6 pt-6 border-t border-slate-200">
+                  <h3 className="text-lg font-bold text-slate-900 mb-3">
+                    Content
+                  </h3>
+                  <p className="text-slate-700 whitespace-pre-wrap">
+                    {lesson.content}
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Code Example */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-              <div className="bg-slate-800 px-4 py-3 flex justify-between items-center">
-                <span className="text-sm font-mono text-slate-300">example.js</span>
-                <button className="text-xs text-indigo-400 hover:text-indigo-300">
-                  Copy Code
-                </button>
+            {lesson.codeExample && (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                <div className="bg-slate-800 px-4 py-3 flex justify-between items-center">
+                  <span className="text-sm font-mono text-slate-300">
+                    example.js
+                  </span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(lesson.codeExample);
+                      alert("Code copied to clipboard!");
+                    }}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                  >
+                    Copy Code
+                  </button>
+                </div>
+                <div className="p-4 bg-slate-900 overflow-x-auto">
+                  <pre className="text-sm text-slate-300 font-mono">
+                    {lesson.codeExample}
+                  </pre>
+                </div>
               </div>
-              <div className="p-4 bg-slate-900 overflow-x-auto">
-                <pre className="text-sm text-slate-300 font-mono">
-                  {lessonContent.codeExample}
-                </pre>
-              </div>
-            </div>
+            )}
 
             {/* Navigation */}
             <div className="flex justify-between items-center">
@@ -320,8 +481,8 @@ example();`,
           <div className="lg:col-span-1 space-y-6">
             {/* AI Chat */}
             {showAIChat && (
-              <div className="bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col h-[500px]">
-                <div className="p-4 border-b border-slate-100 bg-indigo-50 flex items-center gap-2">
+              <div className="bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col h-[600px]">
+                <div className="p-4 border-b border-slate-100 bg-indigo-50 flex items-center gap-2 rounded-t-xl">
                   <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
                     <i className="fa-solid fa-robot"></i>
                   </div>
@@ -332,30 +493,32 @@ example();`,
                 </div>
 
                 <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-slate-50">
-                  {aiMessages.length === 0 && (
+                  {aiMessages.length === 0 ? (
                     <div className="text-center text-slate-500 text-sm mt-8">
                       <i className="fa-solid fa-comments text-3xl mb-2 opacity-50"></i>
                       <p>Need help? Ask your AI tutor!</p>
                     </div>
-                  )}
-                  {aiMessages.map((msg, idx) => (
-                    <div
-                      key={idx}
-                      className={`flex ${
-                        msg.role === "user" ? "justify-end" : "justify-start"
-                      }`}
-                    >
+                  ) : (
+                    aiMessages.map((msg, idx) => (
                       <div
-                        className={`max-w-[80%] px-4 py-3 rounded-2xl ${
-                          msg.role === "user"
-                            ? "bg-indigo-600 text-white"
-                            : "bg-white text-slate-900 border border-slate-200"
+                        key={idx}
+                        className={`flex ${
+                          msg.role === "user" ? "justify-end" : "justify-start"
                         }`}
                       >
-                        {msg.content}
+                        <div
+                          className={`max-w-[80%] px-4 py-3 rounded-2xl break-words ${
+                            msg.role === "user"
+                              ? "bg-indigo-600 text-white"
+                              : "bg-white text-slate-900 border border-slate-200"
+                          }`}
+                        >
+                          {msg.content}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
+
                   {isAIThinking && (
                     <div className="flex justify-start">
                       <div className="bg-white border border-slate-200 px-4 py-3 rounded-2xl">
@@ -373,6 +536,14 @@ example();`,
                       </div>
                     </div>
                   )}
+
+                  {aiError && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm">
+                      {aiError}
+                    </div>
+                  )}
+
+                  <div ref={messagesEndRef} />
                 </div>
 
                 <div className="p-3 border-t border-slate-100">
@@ -381,13 +552,17 @@ example();`,
                       type="text"
                       value={userMessage}
                       onChange={(e) => setUserMessage(e.target.value)}
-                      onKeyPress={(e) => e.key === "Enter" && handleSendAIMessage()}
+                      onKeyPress={(e) =>
+                        e.key === "Enter" && handleSendAIMessage()
+                      }
                       placeholder="Ask a question..."
-                      className="flex-1 px-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      disabled={isAIThinking}
+                      className="flex-1 px-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100"
                     />
                     <button
                       onClick={handleSendAIMessage}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                      disabled={isAIThinking || !userMessage.trim()}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed"
                     >
                       <i className="fa-solid fa-paper-plane"></i>
                     </button>
@@ -418,7 +593,9 @@ example();`,
                       <div className="flex items-center justify-between">
                         <span
                           className={`font-medium ${
-                            moduleNum === lessonId ? "text-indigo-600" : "text-slate-900"
+                            moduleNum === lessonId
+                              ? "text-indigo-600"
+                              : "text-slate-900"
                           }`}
                         >
                           Module {moduleNum}

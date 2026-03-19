@@ -13,6 +13,7 @@ import {
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
+import Logo from "@/public/logo.svg";
 
 export default function Login() {
   const router = useRouter();
@@ -31,18 +32,14 @@ export default function Login() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      // Check if user is a tutor
       const tutorProfileDoc = await getDoc(doc(db, "tutor_profiles", user.uid));
       
       if (tutorProfileDoc.exists()) {
-        // User is a tutor
         router.push("/tutor/dashboard");
       } else {
-        // User is a learner
         router.push("/dashboard");
       }
     } catch (err: any) {
-      // Handle specific Firebase auth errors
       switch (err.code) {
         case "auth/user-not-found":
           setError("No account found with this email. Please register first.");
@@ -76,18 +73,14 @@ export default function Login() {
       const userCredential = await signInWithPopup(auth, provider);
       const user = userCredential.user;
 
-      // Check if user is a tutor
       const tutorProfileDoc = await getDoc(doc(db, "tutor_profiles", user.uid));
       
       if (tutorProfileDoc.exists()) {
-        // User is a tutor
         router.push("/tutor/dashboard");
       } else {
-        // User is a learner
         router.push("/dashboard");
       }
     } catch (err: any) {
-      // Only log unexpected errors to keep console clean
       if (err.code !== "auth/popup-closed-by-user" && 
           err.code !== "auth/cancelled-popup-request" &&
           err.code !== "auth/account-exists-with-different-credential") {
@@ -120,18 +113,14 @@ export default function Login() {
       const userCredential = await signInWithPopup(auth, provider);
       const user = userCredential.user;
 
-      // Check if user is a tutor
       const tutorProfileDoc = await getDoc(doc(db, "tutor_profiles", user.uid));
       
       if (tutorProfileDoc.exists()) {
-        // User is a tutor
         router.push("/tutor/dashboard");
       } else {
-        // User is a learner
         router.push("/dashboard");
       }
     } catch (err: any) {
-      // Only log unexpected errors to keep console clean
       if (err.code !== "auth/popup-closed-by-user" && 
           err.code !== "auth/cancelled-popup-request" &&
           err.code !== "auth/account-exists-with-different-credential") {
@@ -168,9 +157,10 @@ export default function Login() {
 
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-8">
-            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-[#4f46e5] font-bold text-xl">
+            {/* <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-[#4f46e5] font-bold text-xl">
               A
-            </div>
+            </div> */}
+            <Image src={Logo} alt="logo" width={50} />
             <span className="text-2xl font-bold tracking-tight">AmTechy</span>
           </div>
           <h1 className="text-4xl font-bold leading-tight mb-4">

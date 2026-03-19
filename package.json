@@ -9,6 +9,10 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.41",
+    "@ai-sdk/react": "^3.0.118",
+    "@anthropic-ai/sdk": "^0.80.0",
+    "ai": "^6.0.116",
     "firebase": "^12.7.0",
     "framer-motion": "^12.27.0",
     "lucide-react": "^0.562.0",

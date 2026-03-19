@@ -54,7 +54,7 @@ export default function HomePage(){
             <div className="space-y-8">
               <div className="inline-block bg-[#1e40af]/10 text-[#1e40af] px-4 py-2 rounded-full text-sm font-semibold">AI-Powered Learning Platform</div>
                 <h1 className="text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">Find Your Tech Career Path with AI</h1>
-                <p className="text-xl text-gray-600 leading-relaxed">Learn tech the smart way — guided by AI or real tutors. Start your journey from beginner to professional with personalized learning paths.</p>
+                <p className="text-xl text-gray-600 leading-relaxed">Learn tech the smart way guided by AI or real tutors. Start your journey from beginner to professional with personalized learning paths.</p>
                 <div className="flex flex-col sm:flex-row gap-4">
                 <Link href="/register"><button className="bg-[#1e40af] text-white px-8 py-4 rounded-xl hover:bg-blue-700 transition font-semibold text-lg shadow-lg hover:shadow-xl">Get Started Free</button></Link>
                 <Link href="/login"><button className="bg-white text-[#1e40af] border-2 border-[#1e40af] px-8 py-4 rounded-xl hover:bg-[#1e40af] hover:text-white transition font-semibold text-lg">Take Career Quiz</button></Link>
@@ -73,8 +73,8 @@ export default function HomePage(){
               </div>
             </div>
             <motion.div className="relative"
-              initial={{x:100, opacity:0}}
-              whileInView={{x:0, opacity:1}}
+              initial={{opacity:0}}
+              whileInView={{opacity:1}}
               transition={{duration:2}}
             >
               <Image src={HeroSec} alt="Learning with AI" className="rounded-2xl shadow-2xl"/>
@@ -576,7 +576,7 @@ export default function HomePage(){
         </div>
         <div className="bg-white p-8 rounded-2xl shadow-lg">
         <div className="flex items-center mb-6">
-        <Image src={Hero} alt="Kwame" className="w-16 h-16 rounded-full mr-4"/>
+        <Image src={two} alt="Kwame" className="w-16 h-16 rounded-full mr-4"/>
         <div>
         <div className="font-bold text-gray-900">Kwame Mensah</div>
         <div className="text-sm text-gray-600">Accra, Ghana</div>
@@ -594,7 +594,7 @@ export default function HomePage(){
         </div>
         <div className="bg-white p-8 rounded-2xl shadow-lg">
         <div className="flex items-center mb-6">
-        <Image src={Hero} alt="Zainab" className="w-16 h-16 rounded-full mr-4"/>
+        <Image src={Tutor} alt="Zainab" className="w-16 h-16 rounded-full mr-4"/>
         <div>
         <div className="font-bold text-gray-900">Zainab Ahmed</div>
         <div className="text-sm text-gray-600">Nairobi, Kenya</div>
@@ -652,9 +652,10 @@ export default function HomePage(){
         <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-8 mb-12">
         <div className="lg:col-span-2">
         <div className="flex items-center space-x-2 mb-4">
-        <div className="w-10 h-10 bg-gradient-to-br from-[#1e40af] to-[#7c3aed] rounded-lg flex items-center justify-center">
+        {/* <div className="w-10 h-10 bg-gradient-to-br from-[#1e40af] to-[#7c3aed] rounded-lg flex items-center justify-center">
         <span className="text-white font-bold text-xl">A</span>
-        </div>
+        </div> */}
+        <Image src={Logo} width={50} alt="logo" />
         <span className="text-xl font-bold text-white">AmTechy</span>
         </div>
         <p className="text-gray-400 mb-6 max-w-sm">Empowering African learners to launch successful tech careers through AI-powered guidance and expert mentorship.</p>
@@ -706,7 +707,7 @@ export default function HomePage(){
         </div>
         
         <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center">
-        <p className="text-gray-400 text-sm mb-4 md:mb-0">&copy; 2024 AmTechy. All rights reserved.</p>
+        <p className="text-gray-400 text-sm mb-4 md:mb-0">&copy; 2026 AmTechy. All rights reserved.</p>
         <p className="text-gray-400 text-sm mb-4 md:mb-0">Design by Abdulmalik with Peace and Love. <i className="fa-solid fa-heart"></i></p>
         <div className="flex items-center space-x-4 text-sm">
         <a href="#" className="hover:text-[#1e40af] transition">English</a>
