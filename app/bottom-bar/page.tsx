@@ -93,7 +93,6 @@ export default function BottomBar(){
                     })}
                 </div>
 
-                {/* Safe Area for notch/home indicator */}
                 <div className="h-safe-bottom bg-white"></div>
             </nav>
         </div>
