@@ -8,13 +8,22 @@ import { onAuthStateChanged } from "firebase/auth";
 import {
   collection,
   query,
-  where,
   getDocs,
   doc,
   getDoc,
 } from "firebase/firestore";
 import BottomBar from "../bottom-bar/page";
 
+// ── Currency ──────────────────────────────────────────────────────────────────
+const USD_TO_NGN = 1600;
+const toNaira = (usd: number) =>
+  new Intl.NumberFormat("en-NG", {
+    style: "currency",
+    currency: "NGN",
+    maximumFractionDigits: 0,
+  }).format(usd * USD_TO_NGN);
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 interface Tutor {
   id: string;
   name: string;
@@ -31,6 +40,174 @@ interface Tutor {
   verified: boolean;
 }
 
+// ── Tutor Profile Modal ───────────────────────────────────────────────────────
+function TutorProfileModal({
+  tutor,
+  onClose,
+  onBook,
+}: {
+  tutor: Tutor;
+  onClose: () => void;
+  onBook: (tutor: Tutor) => void;
+}) {
+  // Close on backdrop click
+  const handleBackdrop = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.target === e.currentTarget) onClose();
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      onClick={handleBackdrop}
+    >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        {/* Gradient header */}
+        <div className="relative bg-gradient-to-br from-indigo-600 to-purple-600 rounded-t-2xl p-6 pb-16">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 w-8 h-8 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white transition-colors"
+          >
+            <i className="fa-solid fa-xmark text-sm"></i>
+          </button>
+          <p className="text-indigo-200 text-xs font-semibold uppercase tracking-wider mb-1">
+            Mentor Profile
+          </p>
+          <h2 className="text-2xl font-bold text-white">{tutor.name}</h2>
+          <p className="text-indigo-200 mt-0.5 text-sm">
+            {tutor.title}
+            {tutor.company ? ` @ ${tutor.company}` : ""}
+          </p>
+        </div>
+
+        {/* Avatar overlapping header */}
+        <div className="relative px-6 mb-2">
+          <div className="absolute -top-10 left-6">
+            <img
+              src={
+                tutor.profileImage ||
+                `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                  tutor.name
+                )}&background=6366f1&color=fff&size=128`
+              }
+              alt={tutor.name}
+              className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-lg"
+            />
+          </div>
+          {/* Rating + verified */}
+          <div className="flex items-center justify-end gap-3 pt-2">
+            {tutor.verified && (
+              <span className="flex items-center gap-1 text-indigo-600 text-sm font-medium">
+                <i className="fa-solid fa-circle-check"></i> Verified
+              </span>
+            )}
+            <span className="flex items-center gap-1 text-sm font-medium text-slate-700">
+              <i className="fa-solid fa-star text-yellow-400"></i>
+              {tutor.rating}
+              <span className="text-slate-400 font-normal">
+                ({tutor.reviewCount} reviews)
+              </span>
+            </span>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 pb-6 space-y-5 mt-6">
+          {/* About */}
+          <div>
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+              About
+            </h3>
+            <p className="text-sm text-slate-700 leading-relaxed">
+              {tutor.bio || "No bio provided."}
+            </p>
+          </div>
+
+          {/* Skills */}
+          {tutor.skills.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                Skills
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {tutor.skills.map((skill, idx) => (
+                  <span
+                    key={idx}
+                    className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-full"
+                  >
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Expertise */}
+          {tutor.expertise?.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                Areas of Expertise
+              </h3>
+              <ul className="space-y-1">
+                {tutor.expertise.map((item, idx) => (
+                  <li
+                    key={idx}
+                    className="flex items-center gap-2 text-sm text-slate-700"
+                  >
+                    <i className="fa-solid fa-check text-indigo-500 text-xs"></i>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Availability */}
+          <div>
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+              Availability
+            </h3>
+            <span
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${
+                tutor.availability.toLowerCase().includes("available")
+                  ? "bg-green-50 text-green-700"
+                  : "bg-orange-50 text-orange-700"
+              }`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  tutor.availability.toLowerCase().includes("available")
+                    ? "bg-green-500"
+                    : "bg-orange-500"
+                }`}
+              ></span>
+              {tutor.availability}
+            </span>
+          </div>
+
+          {/* Rate + Book CTA */}
+          <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+            <div>
+              <span className="text-2xl font-bold text-slate-900">
+                {toNaira(tutor.hourlyRate)}
+              </span>
+              <span className="text-xs text-slate-400 ml-1">
+                ≈ ${tutor.hourlyRate} / session
+              </span>
+            </div>
+            <button
+              onClick={() => onBook(tutor)}
+              className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors shadow-md shadow-indigo-200"
+            >
+              Book Session
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function FindTutor() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
@@ -40,6 +217,7 @@ export default function FindTutor() {
   const [selectedSkill, setSelectedSkill] = useState("all");
   const [showFilters, setShowFilters] = useState(false);
   const [userCareerGoal, setUserCareerGoal] = useState("");
+  const [profileTutor, setProfileTutor] = useState<Tutor | null>(null);
 
   const skillCategories = [
     { id: "all", label: "All Tutors", icon: "👨‍🏫" },
@@ -61,7 +239,6 @@ export default function FindTutor() {
         router.push("/login");
       }
     });
-
     return () => unsubscribe();
   }, [router]);
 
@@ -82,12 +259,7 @@ export default function FindTutor() {
 
   const fetchTutors = async () => {
     try {
-      // Fetch all tutors (remove status filter for now)
-      const tutorsQuery = query(collection(db, "tutors"));
-      const snapshot = await getDocs(tutorsQuery);
-
-      console.log("Total tutors found:", snapshot.docs.length);
-
+      const snapshot = await getDocs(query(collection(db, "tutors")));
       const tutorsData: Tutor[] = snapshot.docs.map((doc) => ({
         id: doc.id,
         name: doc.data().name || "",
@@ -103,7 +275,6 @@ export default function FindTutor() {
         availability: doc.data().availability || "Available",
         verified: doc.data().verified || false,
       }));
-
       setTutors(tutorsData);
       setFilteredTutors(tutorsData);
     } catch (error) {
@@ -113,7 +284,6 @@ export default function FindTutor() {
 
   const filterTutors = () => {
     let filtered = [...tutors];
-
     if (selectedSkill !== "all") {
       filtered = filtered.filter((tutor) =>
         tutor.skills.some((skill) =>
@@ -121,7 +291,6 @@ export default function FindTutor() {
         )
       );
     }
-
     if (searchQuery) {
       filtered = filtered.filter(
         (tutor) =>
@@ -133,7 +302,6 @@ export default function FindTutor() {
           tutor.bio.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
-
     setFilteredTutors(filtered);
   };
 
@@ -145,10 +313,8 @@ export default function FindTutor() {
       mobile: ["mobile", "react native", "flutter"],
       designer: ["figma", "ui/ux", "design"],
     };
-
     const keywords = careerKeywords[userCareerGoal] || [];
     if (keywords.length === 0) return [];
-
     return tutors
       .filter((tutor) => {
         const skillsText = tutor.skills.join(" ").toLowerCase();
@@ -158,6 +324,10 @@ export default function FindTutor() {
   };
 
   const recommendedTutors = getRecommendedTutors();
+
+  const goToBooking = (tutor: Tutor) => {
+    router.push(`/book-tutor?tutorId=${tutor.id}`);
+  };
 
   if (loading) {
     return (
@@ -175,6 +345,8 @@ export default function FindTutor() {
       <SideBar />
       <section className="flex-1 p-6 overflow-y-auto">
         <div className="max-w-7xl mx-auto space-y-6">
+
+          {/* Page Header */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h1 className="text-3xl font-bold text-slate-900">Find a Mentor</h1>
@@ -202,7 +374,10 @@ export default function FindTutor() {
               </div>
             </div>
           </div>
-          <BottomBar/>
+
+          <BottomBar />
+
+          {/* Recommended */}
           {recommendedTutors.length > 0 && (
             <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-6 border border-indigo-100">
               <div className="flex items-center gap-2 mb-4">
@@ -218,14 +393,15 @@ export default function FindTutor() {
                 {recommendedTutors.map((tutor) => (
                   <div
                     key={tutor.id}
-                    className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-lg transition-shadow cursor-pointer"
-                    onClick={() => router.push(`/book-tutor?tutorId=${tutor.id}`)}
+                    className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-lg transition-shadow"
                   >
                     <div className="flex items-start gap-3 mb-3">
                       <img
                         src={
                           tutor.profileImage ||
-                          `https://ui-avatars.com/api/?name=${encodeURIComponent(tutor.name)}&background=6366f1&color=fff`
+                          `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                            tutor.name
+                          )}&background=6366f1&color=fff`
                         }
                         alt={tutor.name}
                         className="w-12 h-12 rounded-full object-cover"
@@ -243,9 +419,23 @@ export default function FindTutor() {
                         </div>
                       </div>
                     </div>
-                    <p className="text-sm font-bold text-indigo-600">
-                      ${tutor.hourlyRate}/session
+                    <p className="text-sm font-bold text-indigo-600 mb-3">
+                      {toNaira(tutor.hourlyRate)}/session
                     </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setProfileTutor(tutor)}
+                        className="flex-1 py-1.5 text-xs font-semibold border border-indigo-200 text-indigo-600 rounded-lg hover:bg-indigo-50 transition-colors"
+                      >
+                        View Profile
+                      </button>
+                      <button
+                        onClick={() => goToBooking(tutor)}
+                        className="flex-1 py-1.5 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+                      >
+                        Book Now
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -280,8 +470,8 @@ export default function FindTutor() {
           {/* Stats */}
           <div className="flex items-center justify-between">
             <p className="text-slate-600">
-              {filteredTutors.length} mentor{filteredTutors.length !== 1 ? "s" : ""}{" "}
-              available
+              {filteredTutors.length} mentor
+              {filteredTutors.length !== 1 ? "s" : ""} available
             </p>
           </div>
 
@@ -291,23 +481,27 @@ export default function FindTutor() {
               {filteredTutors.map((tutor) => (
                 <div
                   key={tutor.id}
-                  className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
-                  onClick={() => router.push(`/book-tutor?tutorId=${tutor.id}`)}
+                  className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-lg transition-shadow"
                 >
                   <div className="p-6">
+                    {/* Card header */}
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex gap-4">
                         <img
                           src={
                             tutor.profileImage ||
-                            `https://ui-avatars.com/api/?name=${encodeURIComponent(tutor.name)}&background=6366f1&color=fff`
+                            `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                              tutor.name
+                            )}&background=6366f1&color=fff`
                           }
                           alt={tutor.name}
                           className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-sm"
                         />
                         <div>
                           <div className="flex items-center gap-2">
-                            <h3 className="font-bold text-slate-900">{tutor.name}</h3>
+                            <h3 className="font-bold text-slate-900">
+                              {tutor.name}
+                            </h3>
                             {tutor.verified && (
                               <i
                                 className="fa-solid fa-circle-check text-indigo-600"
@@ -316,7 +510,8 @@ export default function FindTutor() {
                             )}
                           </div>
                           <p className="text-sm text-slate-500">
-                            {tutor.title} @ {tutor.company}
+                            {tutor.title}
+                            {tutor.company ? ` @ ${tutor.company}` : ""}
                           </p>
                           <div className="flex items-center gap-1 mt-1">
                             <i className="fa-solid fa-star text-yellow-400 text-xs"></i>
@@ -351,22 +546,32 @@ export default function FindTutor() {
                       )}
                     </div>
 
+                    {/* Footer */}
                     <div className="flex items-center justify-between pt-4 border-t border-slate-100">
                       <div>
-                        <span className="text-lg font-bold text-slate-900">
-                          ${tutor.hourlyRate}
+                        <span className="text-base font-bold text-slate-900">
+                          {toNaira(tutor.hourlyRate)}
                         </span>
-                        <span className="text-xs text-slate-500">/ session</span>
+                        <span className="text-xs text-slate-400 block">
+                          ≈ ${tutor.hourlyRate} / session
+                        </span>
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          router.push(`/book-tutor?tutorId=${tutor.id}`);
-                        }}
-                        className="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors"
-                      >
-                        Book Now
-                      </button>
+                      <div className="flex gap-2">
+                        {/* View Profile */}
+                        <button
+                          onClick={() => setProfileTutor(tutor)}
+                          className="px-3 py-2 border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 hover:border-indigo-300 hover:text-indigo-600 transition-colors"
+                        >
+                          Profile
+                        </button>
+                        {/* Book Now → /book-tutor */}
+                        <button
+                          onClick={() => goToBooking(tutor)}
+                          className="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 transition-colors"
+                        >
+                          Book Now
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -396,6 +601,18 @@ export default function FindTutor() {
           )}
         </div>
       </section>
+
+      {/* Profile Modal */}
+      {profileTutor && (
+        <TutorProfileModal
+          tutor={profileTutor}
+          onClose={() => setProfileTutor(null)}
+          onBook={(tutor) => {
+            setProfileTutor(null);
+            goToBooking(tutor);
+          }}
+        />
+      )}
     </main>
   );
 }

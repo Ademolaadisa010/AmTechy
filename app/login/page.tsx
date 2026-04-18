@@ -23,6 +23,26 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Centralized role-based navigation function
+  const navigateBasedOnRole = async (uid: string) => {
+    try {
+      // Check if user has a tutor profile
+      const tutorProfileDoc = await getDoc(doc(db, "tutor_profiles", uid));
+      
+      if (tutorProfileDoc.exists()) {
+        router.push("/tutor/dashboard");
+        return;
+      }
+
+      // If no tutor profile, assume learner and go to learner dashboard
+      router.push("/dashboard");
+    } catch (err) {
+      console.error("Error checking user role:", err);
+      // Fallback to learner dashboard if there's an error
+      router.push("/dashboard");
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -32,13 +52,7 @@ export default function Login() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
 
-      const tutorProfileDoc = await getDoc(doc(db, "tutor_profiles", user.uid));
-      
-      if (tutorProfileDoc.exists()) {
-        router.push("/tutor/dashboard");
-      } else {
-        router.push("/dashboard");
-      }
+      await navigateBasedOnRole(user.uid);
     } catch (err: any) {
       switch (err.code) {
         case "auth/user-not-found":
@@ -73,13 +87,7 @@ export default function Login() {
       const userCredential = await signInWithPopup(auth, provider);
       const user = userCredential.user;
 
-      const tutorProfileDoc = await getDoc(doc(db, "tutor_profiles", user.uid));
-      
-      if (tutorProfileDoc.exists()) {
-        router.push("/tutor/dashboard");
-      } else {
-        router.push("/dashboard");
-      }
+      await navigateBasedOnRole(user.uid);
     } catch (err: any) {
       if (err.code !== "auth/popup-closed-by-user" && 
           err.code !== "auth/cancelled-popup-request" &&
@@ -93,7 +101,7 @@ export default function Login() {
         const email = err.customData?.email;
         setError(
           email 
-            ? `An account with ${email} already exists. Please sign in using the method you originally used (GitHub or Email/Password).`
+            ? `An account with ${email} already exists. Please sign in using the method you originally used.`
             : "An account already exists with this email. Please use your original sign-in method."
         );
       } else if (err.code !== "auth/cancelled-popup-request") {
@@ -113,13 +121,7 @@ export default function Login() {
       const userCredential = await signInWithPopup(auth, provider);
       const user = userCredential.user;
 
-      const tutorProfileDoc = await getDoc(doc(db, "tutor_profiles", user.uid));
-      
-      if (tutorProfileDoc.exists()) {
-        router.push("/tutor/dashboard");
-      } else {
-        router.push("/dashboard");
-      }
+      await navigateBasedOnRole(user.uid);
     } catch (err: any) {
       if (err.code !== "auth/popup-closed-by-user" && 
           err.code !== "auth/cancelled-popup-request" &&
@@ -133,7 +135,7 @@ export default function Login() {
         const email = err.customData?.email;
         setError(
           email 
-            ? `An account with ${email} already exists. Please sign in using the method you originally used (Google or Email/Password).`
+            ? `An account with ${email} already exists. Please sign in using the method you originally used.`
             : "An account already exists with this email. Please use your original sign-in method."
         );
       } else if (err.code !== "auth/cancelled-popup-request") {
@@ -151,16 +153,18 @@ export default function Login() {
     >
       <div className="hidden md:flex md:w-1/2 bg-slate-900 relative overflow-hidden flex-col justify-between p-12 text-white">
         <div className="absolute inset-0 opacity-40">
-          <Image src={Learning} className="w-full h-full object-cover" alt="Students learning" />
-          <div className="absolute inset-0 bg-gradient-to-br from-[#312e81]-900/600 to-[#9333ea]" />
+          <Image 
+            src={Learning} 
+            className="w-full h-full object-cover" 
+            alt="Students learning" 
+            priority 
+          />
+          <div className="absolute inset-0 bg-gradient-to-br from-slate-900/70 to-[#312e81]/80" />
         </div>
 
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-8">
-            {/* <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-[#4f46e5] font-bold text-xl">
-              A
-            </div> */}
-            <Image src={Logo} alt="logo" width={50} />
+            <Image src={Logo} alt="AmTechy logo" width={50} />
             <span className="text-2xl font-bold tracking-tight">AmTechy</span>
           </div>
           <h1 className="text-4xl font-bold leading-tight mb-4">

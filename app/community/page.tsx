@@ -1,63 +1,70 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import SideBar from "../sidebar/page";
+import BottomBar from "../bottom-bar/page";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import {
-  collection,
-  addDoc,
-  query,
-  orderBy,
-  limit,
-  getDocs,
-  serverTimestamp,
-  doc,
-  getDoc,
-  updateDoc,
-  arrayUnion,
-  arrayRemove,
-  where,
+  collection, addDoc, query, orderBy, limit, getDocs,
+  serverTimestamp, doc, getDoc, updateDoc, arrayUnion,
+  arrayRemove, where, deleteDoc,
 } from "firebase/firestore";
-import BottomBar from "../bottom-bar/page";
+
+interface UserProfile {
+  uid: string;
+  displayName: string;
+  photoURL?: string;
+  title?: string;
+  bio?: string;
+  careerGoal?: string;
+  skills?: string[];
+  friends?: string[];
+}
 
 interface Post {
   id: string;
   userId: string;
   userName: string;
   userAvatar?: string;
+  userTitle?: string;
   content: string;
-  image?: string;
+  mediaUrl?: string;
+  mediaType?: "image" | "video";
   likes: string[];
-  comments: Comment[];
+  comments: PostComment[];
   createdAt: any;
 }
 
-interface Comment {
+interface PostComment {
   id: string;
   userId: string;
   userName: string;
+  userAvatar?: string;
   content: string;
   createdAt: any;
 }
 
-interface Story {
+interface FriendRequest {
   id: string;
-  userId: string;
-  userName: string;
-  userAvatar: string;
-  image: string;
+  fromId: string;
+  fromName: string;
+  fromAvatar?: string;
+  fromTitle?: string;
+  toId: string;
+  status: "pending" | "accepted" | "declined";
+  createdAt: any;
 }
 
-interface ChatUser {
+interface Group {
   id: string;
   name: string;
-  avatar: string;
-  lastMessage: string;
-  time: string;
-  unread: number;
-  online: boolean;
+  description: string;
+  coverColor: string;
+  memberIds: string[];
+  adminId: string;
+  createdAt: any;
 }
 
 interface Message {
@@ -65,507 +72,916 @@ interface Message {
   senderId: string;
   content: string;
   timestamp: Date;
-  read: boolean;
 }
 
+const avatarUrl = (name: string, bg = "6366f1") =>
+  `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=${bg}&color=fff&size=128`;
+
+const timeAgo = (ts: any): string => {
+  if (!ts) return "Just now";
+  const date = ts?.toDate?.() || new Date(ts);
+  const diff = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (diff < 60) return "Just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+};
+
+const GROUP_COLORS = [
+  "from-indigo-500 to-purple-600",
+  "from-emerald-500 to-teal-600",
+  "from-rose-500 to-pink-600",
+  "from-amber-500 to-orange-600",
+  "from-sky-500 to-blue-600",
+  "from-violet-500 to-fuchsia-600",
+];
+
+const CAREER_ICONS: Record<string, string> = {
+  frontend: "⚛️",
+  backend: "⚙️",
+  "data-science": "📊",
+  mobile: "📱",
+  designer: "🎨",
+  devops: "🛠️",
+};
+
+// ─── Friend Card ──────────────────────────────────────────────────────────────
+function FriendCard({ friend, currentUser, mutualCount, onViewProfile, onMessage, onUnfriend }: {
+  friend: UserProfile;
+  currentUser: UserProfile;
+  mutualCount: number;
+  onViewProfile: (uid: string) => void;
+  onMessage: (friend: UserProfile) => void;
+  onUnfriend: (uid: string) => void;
+}) {
+  const [showMenu, setShowMenu] = useState(false);
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-md transition-all group">
+      {/* Cover banner */}
+      <div className="h-16 bg-gradient-to-r from-indigo-400 to-purple-500 relative">
+        <div className="absolute inset-0 opacity-20"
+          style={{ backgroundImage: "radial-gradient(circle at 20% 50%, white 1px, transparent 1px), radial-gradient(circle at 80% 20%, white 1px, transparent 1px)", backgroundSize: "30px 30px" }} />
+        {/* Menu button */}
+        <div className="absolute top-2 right-2">
+          <button onClick={() => setShowMenu(!showMenu)}
+            className="w-7 h-7 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white transition-colors">
+            <i className="fa-solid fa-ellipsis text-xs"></i>
+          </button>
+          {showMenu && (
+            <div className="absolute right-0 top-8 bg-white rounded-xl shadow-lg border border-slate-100 py-1 z-10 w-36">
+              <button onClick={() => { onViewProfile(friend.uid); setShowMenu(false); }}
+                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                <i className="fa-solid fa-user text-slate-400 text-xs w-3"></i> View Profile
+              </button>
+              <button onClick={() => { onMessage(friend); setShowMenu(false); }}
+                className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                <i className="fa-solid fa-comment text-slate-400 text-xs w-3"></i> Message
+              </button>
+              <div className="h-px bg-slate-100 my-1" />
+              <button onClick={() => { onUnfriend(friend.uid); setShowMenu(false); }}
+                className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2">
+                <i className="fa-solid fa-user-minus text-red-400 text-xs w-3"></i> Unfriend
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="px-4 pb-4">
+        {/* Avatar */}
+        <div className="-mt-8 mb-3 flex items-end justify-between">
+          <img
+            src={friend.photoURL || avatarUrl(friend.displayName)}
+            alt={friend.displayName}
+            className="w-16 h-16 rounded-full border-4 border-white shadow-md object-cover cursor-pointer"
+            onClick={() => onViewProfile(friend.uid)}
+          />
+          <button
+            onClick={() => onMessage(friend)}
+            className="mb-1 flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            <i className="fa-solid fa-comment text-xs"></i> Message
+          </button>
+        </div>
+
+        {/* Name & title */}
+        <h3
+          className="font-bold text-slate-900 text-base cursor-pointer hover:text-indigo-600 transition-colors leading-tight"
+          onClick={() => onViewProfile(friend.uid)}
+        >
+          {friend.displayName}
+        </h3>
+        {friend.title && (
+          <p className="text-xs text-indigo-500 font-medium mt-0.5">{friend.title}</p>
+        )}
+
+        {/* Career goal */}
+        {friend.careerGoal && (
+          <div className="flex items-center gap-1.5 mt-2">
+            <span className="text-sm">{CAREER_ICONS[friend.careerGoal] || "💼"}</span>
+            <span className="text-xs text-slate-600 capitalize font-medium">{friend.careerGoal.replace("-", " ")}</span>
+          </div>
+        )}
+
+        {/* Bio */}
+        {friend.bio && (
+          <p className="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed">{friend.bio}</p>
+        )}
+
+        {/* Skills */}
+        {friend.skills && friend.skills.length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-3">
+            {friend.skills.slice(0, 3).map((skill) => (
+              <span key={skill} className="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded-full font-medium">
+                {skill}
+              </span>
+            ))}
+            {friend.skills.length > 3 && (
+              <span className="px-2 py-0.5 bg-slate-100 text-slate-400 text-xs rounded-full">
+                +{friend.skills.length - 3}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Footer stats */}
+        <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
+          <div className="flex items-center gap-1 text-xs text-slate-500">
+            <i className="fa-solid fa-user-group text-slate-300 text-xs"></i>
+            <span>{friend.friends?.length || 0} friends</span>
+          </div>
+          {mutualCount > 0 && (
+            <div className="flex items-center gap-1 text-xs text-indigo-500 font-medium">
+              <i className="fa-solid fa-link text-xs"></i>
+              <span>{mutualCount} mutual</span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Profile Modal ────────────────────────────────────────────────────────────
+function ProfileModal({ profile, currentUserId, currentUserFriends, onClose, onFriendAction, onMessage }: {
+  profile: UserProfile;
+  currentUserId: string;
+  currentUserFriends: string[];
+  onClose: () => void;
+  onFriendAction: (targetId: string, action: "send" | "unfriend") => void;
+  onMessage?: (profile: UserProfile) => void;
+}) {
+  const isFriend = currentUserFriends.includes(profile.uid);
+  const isSelf = profile.uid === currentUserId;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        {/* Cover */}
+        <div className="h-32 bg-gradient-to-r from-indigo-500 to-purple-600 relative">
+          <div className="absolute inset-0 opacity-20"
+            style={{ backgroundImage: "radial-gradient(circle at 25% 50%, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+          <button onClick={onClose}
+            className="absolute top-3 right-3 w-8 h-8 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white">
+            <i className="fa-solid fa-xmark text-sm"></i>
+          </button>
+        </div>
+
+        <div className="px-6 pb-6">
+          {/* Avatar row */}
+          <div className="flex items-end justify-between -mt-10 mb-4">
+            <img
+              src={profile.photoURL || avatarUrl(profile.displayName)}
+              alt={profile.displayName}
+              className="w-20 h-20 rounded-full border-4 border-white shadow-lg object-cover"
+            />
+            {!isSelf && (
+              <div className="flex gap-2 mb-1">
+                {onMessage && (
+                  <button onClick={() => { onMessage(profile); onClose(); }}
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-colors flex items-center gap-1.5">
+                    <i className="fa-solid fa-comment text-xs"></i> Message
+                  </button>
+                )}
+                <button
+                  onClick={() => { onFriendAction(profile.uid, isFriend ? "unfriend" : "send"); onClose(); }}
+                  className={`px-3 py-2 rounded-xl font-semibold text-xs transition-colors ${isFriend ? "bg-slate-100 text-slate-700 hover:bg-red-50 hover:text-red-600" : "bg-indigo-600 text-white hover:bg-indigo-700"}`}>
+                  {isFriend ? "Unfriend" : "+ Add Friend"}
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Name */}
+          <h2 className="text-xl font-bold text-slate-900">{profile.displayName}</h2>
+          {profile.title && <p className="text-sm text-indigo-600 font-medium mt-0.5">{profile.title}</p>}
+
+          {/* Career goal */}
+          {profile.careerGoal && (
+            <div className="flex items-center gap-2 mt-2">
+              <span className="text-base">{CAREER_ICONS[profile.careerGoal] || "💼"}</span>
+              <span className="text-sm text-slate-600 capitalize">{profile.careerGoal.replace("-", " ")}</span>
+            </div>
+          )}
+
+          {/* Bio */}
+          {profile.bio && (
+            <p className="text-sm text-slate-600 mt-3 leading-relaxed bg-slate-50 rounded-xl px-3 py-2">{profile.bio}</p>
+          )}
+
+          {/* Skills */}
+          {profile.skills && profile.skills.length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Skills</p>
+              <div className="flex flex-wrap gap-1.5">
+                {profile.skills.map((s) => (
+                  <span key={s} className="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs rounded-full font-medium">{s}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Stats */}
+          <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-4 text-center">
+            <div className="bg-slate-50 rounded-xl py-3">
+              <p className="text-xl font-bold text-slate-900">{profile.friends?.length || 0}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Friends</p>
+            </div>
+            <div className="bg-slate-50 rounded-xl py-3">
+              <p className="text-xl font-bold text-slate-900">{profile.skills?.length || 0}</p>
+              <p className="text-xs text-slate-500 mt-0.5">Skills</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Create Post Modal ────────────────────────────────────────────────────────
+function CreatePostModal({ user, onClose, onPost }: {
+  user: UserProfile;
+  onClose: () => void;
+  onPost: (content: string, mediaUrl?: string, mediaType?: "image" | "video") => Promise<void>;
+}) {
+  const [content, setContent] = useState("");
+  const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaType, setMediaType] = useState<"image" | "video" | undefined>();
+  const [urlInput, setUrlInput] = useState("");
+  const [mediaMode, setMediaMode] = useState<"none" | "image" | "video">("none");
+  const [posting, setPosting] = useState(false);
+
+  const handlePost = async () => {
+    if (!content.trim()) return;
+    setPosting(true);
+    await onPost(content, mediaUrl || undefined, mediaType);
+    setPosting(false);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <h3 className="text-lg font-bold text-slate-900">Create Post</h3>
+          <button onClick={onClose} className="w-8 h-8 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center">
+            <i className="fa-solid fa-xmark text-slate-600 text-sm"></i>
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <img src={user.photoURL || avatarUrl(user.displayName)} alt={user.displayName} className="w-10 h-10 rounded-full object-cover" />
+            <div>
+              <p className="font-semibold text-slate-900 text-sm">{user.displayName}</p>
+              <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">🌍 Public</span>
+            </div>
+          </div>
+
+          <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={4}
+            placeholder={`What's on your mind, ${user.displayName.split(" ")[0]}?`}
+            className="w-full text-slate-900 placeholder-slate-400 focus:outline-none resize-none text-base leading-relaxed" />
+
+          {mediaUrl && mediaType === "image" && (
+            <div className="relative rounded-xl overflow-hidden">
+              <img src={mediaUrl} alt="preview" className="w-full max-h-48 object-cover" />
+              <button onClick={() => { setMediaUrl(""); setMediaType(undefined); setUrlInput(""); }}
+                className="absolute top-2 right-2 w-7 h-7 bg-black/50 text-white rounded-full flex items-center justify-center text-xs">
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+          )}
+          {mediaUrl && mediaType === "video" && (
+            <div className="relative rounded-xl overflow-hidden">
+              <video src={mediaUrl} controls className="w-full max-h-48 rounded-xl" />
+              <button onClick={() => { setMediaUrl(""); setMediaType(undefined); setUrlInput(""); }}
+                className="absolute top-2 right-2 w-7 h-7 bg-black/50 text-white rounded-full flex items-center justify-center text-xs">
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+          )}
+
+          {mediaMode !== "none" && !mediaUrl && (
+            <div className="flex gap-2">
+              <input value={urlInput} onChange={(e) => setUrlInput(e.target.value)}
+                placeholder={mediaMode === "image" ? "Paste image URL…" : "Paste video URL…"}
+                className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <button onClick={() => { setMediaUrl(urlInput.trim()); setMediaType(mediaMode as "image" | "video"); }}
+                disabled={!urlInput.trim()}
+                className="px-3 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50">Add</button>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+            <span className="text-xs font-semibold text-slate-500 mr-1">Add:</span>
+            <button onClick={() => setMediaMode(mediaMode === "image" ? "none" : "image")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${mediaMode === "image" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+              <i className="fa-solid fa-image"></i> Photo
+            </button>
+            <button onClick={() => setMediaMode(mediaMode === "video" ? "none" : "video")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${mediaMode === "video" ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+              <i className="fa-solid fa-video"></i> Video
+            </button>
+          </div>
+
+          <button onClick={handlePost} disabled={!content.trim() || posting}
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2">
+            {posting ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>Posting…</> : "Post"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Create Group Modal ───────────────────────────────────────────────────────
+function CreateGroupModal({ currentUser, allUsers, onClose, onCreate }: {
+  currentUser: UserProfile;
+  allUsers: UserProfile[];
+  onClose: () => void;
+  onCreate: (name: string, description: string, color: string, memberIds: string[]) => Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [color, setColor] = useState(GROUP_COLORS[0]);
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [search, setSearch] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  const filtered = allUsers.filter(
+    (u) => u.uid !== currentUser.uid && u.displayName.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const toggle = (uid: string) =>
+    setSelectedMembers((p) => p.includes(uid) ? p.filter((id) => id !== uid) : [...p, uid]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md my-4">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <h3 className="text-lg font-bold text-slate-900">Create Group</h3>
+          <button onClick={onClose} className="w-8 h-8 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center">
+            <i className="fa-solid fa-xmark text-slate-600 text-sm"></i>
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className={`h-20 rounded-xl bg-gradient-to-r ${color} flex items-center justify-center`}>
+            <p className="text-white font-bold text-lg">{name || "Group Name"}</p>
+          </div>
+          <div className="flex gap-2">
+            {GROUP_COLORS.map((c) => (
+              <button key={c} onClick={() => setColor(c)}
+                className={`w-8 h-8 rounded-full bg-gradient-to-br ${c} ${color === c ? "ring-2 ring-offset-2 ring-indigo-500" : ""}`} />
+            ))}
+          </div>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Group name *"
+            className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2}
+            placeholder="What is this group about?"
+            className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" />
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
+              Add Members ({selectedMembers.length} selected)
+            </label>
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search users…"
+              className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-2" />
+            <div className="max-h-36 overflow-y-auto space-y-1">
+              {filtered.map((u) => (
+                <div key={u.uid} onClick={() => toggle(u.uid)}
+                  className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${selectedMembers.includes(u.uid) ? "bg-indigo-50" : "hover:bg-slate-50"}`}>
+                  <img src={u.photoURL || avatarUrl(u.displayName)} alt={u.displayName} className="w-8 h-8 rounded-full object-cover" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-800 truncate">{u.displayName}</p>
+                    {u.title && <p className="text-xs text-slate-400 truncate">{u.title}</p>}
+                  </div>
+                  {selectedMembers.includes(u.uid) && <i className="fa-solid fa-check text-indigo-600 text-xs"></i>}
+                </div>
+              ))}
+            </div>
+          </div>
+          <button onClick={async () => { setCreating(true); await onCreate(name, description, color, selectedMembers); setCreating(false); onClose(); }}
+            disabled={!name.trim() || creating}
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2">
+            {creating ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>Creating…</> : "Create Group"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Group Detail Modal ───────────────────────────────────────────────────────
+function GroupDetailModal({ group, allUsers, currentUserId, onClose, onAddMember, onLeave }: {
+  group: Group; allUsers: UserProfile[]; currentUserId: string;
+  onClose: () => void; onAddMember: (gid: string, uid: string) => Promise<void>; onLeave: (gid: string) => Promise<void>;
+}) {
+  const [search, setSearch] = useState("");
+  const members = allUsers.filter((u) => group.memberIds.includes(u.uid));
+  const nonMembers = allUsers.filter((u) => !group.memberIds.includes(u.uid) && u.displayName.toLowerCase().includes(search.toLowerCase()));
+  const isAdmin = group.adminId === currentUserId;
+  const isMember = group.memberIds.includes(currentUserId);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto"
+      onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md my-4">
+        <div className={`h-24 bg-gradient-to-r ${group.coverColor} rounded-t-2xl relative flex items-center justify-center`}>
+          <p className="text-white font-bold text-xl">{group.name}</p>
+          <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white">
+            <i className="fa-solid fa-xmark text-sm"></i>
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          {group.description && <p className="text-sm text-slate-600">{group.description}</p>}
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-semibold text-slate-700">{members.length} member{members.length !== 1 ? "s" : ""}</p>
+            {!isMember && (
+              <button onClick={() => onAddMember(group.id, currentUserId)}
+                className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700">Join Group</button>
+            )}
+            {isMember && !isAdmin && (
+              <button onClick={() => { onLeave(group.id); onClose(); }}
+                className="px-3 py-1.5 bg-red-50 text-red-600 text-xs font-semibold rounded-lg hover:bg-red-100">Leave Group</button>
+            )}
+          </div>
+          <div className="space-y-2 max-h-40 overflow-y-auto">
+            {members.map((m) => (
+              <div key={m.uid} className="flex items-center gap-3">
+                <img src={m.photoURL || avatarUrl(m.displayName)} alt={m.displayName} className="w-9 h-9 rounded-full object-cover" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-slate-800 truncate">{m.displayName}</p>
+                  {m.title && <p className="text-xs text-slate-400 truncate">{m.title}</p>}
+                </div>
+                {m.uid === group.adminId && (
+                  <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full font-medium">Admin</span>
+                )}
+              </div>
+            ))}
+          </div>
+          {isAdmin && (
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Add Members</p>
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search users to add…"
+                className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-2" />
+              <div className="space-y-1 max-h-32 overflow-y-auto">
+                {nonMembers.map((u) => (
+                  <div key={u.uid} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50">
+                    <img src={u.photoURL || avatarUrl(u.displayName)} alt={u.displayName} className="w-8 h-8 rounded-full object-cover" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-slate-800 truncate">{u.displayName}</p>
+                      {u.title && <p className="text-xs text-slate-400 truncate">{u.title}</p>}
+                    </div>
+                    <button onClick={() => onAddMember(group.id, u.uid)}
+                      className="px-2.5 py-1 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700">Add</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Post Card ────────────────────────────────────────────────────────────────
+function PostCard({ post, currentUser, onLike, onComment, onViewProfile }: {
+  post: Post; currentUser: UserProfile;
+  onLike: (id: string) => void; onComment: (id: string, text: string) => void; onViewProfile: (uid: string) => void;
+}) {
+  const [showComments, setShowComments] = useState(false);
+  const [commentText, setCommentText] = useState("");
+  const liked = post.likes.includes(currentUser.uid);
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      <div className="p-4 flex items-center justify-between">
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => onViewProfile(post.userId)}>
+          <img src={post.userAvatar || avatarUrl(post.userName)} alt={post.userName} className="w-10 h-10 rounded-full object-cover" />
+          <div>
+            <p className="font-semibold text-slate-900 text-sm hover:text-indigo-600 transition-colors">{post.userName}</p>
+            {post.userTitle && <p className="text-xs text-indigo-500">{post.userTitle}</p>}
+            <p className="text-xs text-slate-400">{timeAgo(post.createdAt)}</p>
+          </div>
+        </div>
+        <button className="w-8 h-8 hover:bg-slate-100 rounded-full flex items-center justify-center">
+          <i className="fa-solid fa-ellipsis text-slate-400 text-sm"></i>
+        </button>
+      </div>
+      <div className="px-4 pb-3">
+        <p className="text-slate-800 text-sm leading-relaxed whitespace-pre-wrap">{post.content}</p>
+      </div>
+      {post.mediaUrl && post.mediaType === "image" && <img src={post.mediaUrl} alt="Post" className="w-full max-h-80 object-cover" />}
+      {post.mediaUrl && post.mediaType === "video" && <video src={post.mediaUrl} controls className="w-full max-h-80" />}
+      <div className="px-4 py-2 flex items-center justify-between text-xs text-slate-500 border-t border-slate-50">
+        <span>{post.likes.length} like{post.likes.length !== 1 ? "s" : ""}</span>
+        <button onClick={() => setShowComments(!showComments)} className="hover:text-slate-800">
+          {post.comments.length} comment{post.comments.length !== 1 ? "s" : ""}
+        </button>
+      </div>
+      <div className="flex border-t border-slate-100">
+        {[
+          { icon: liked ? "fa-solid fa-heart" : "fa-regular fa-heart", label: "Like", action: () => onLike(post.id), active: liked },
+          { icon: "fa-regular fa-comment", label: "Comment", action: () => setShowComments(!showComments), active: false },
+          { icon: "fa-regular fa-share-from-square", label: "Share", action: () => {}, active: false },
+        ].map((btn) => (
+          <button key={btn.label} onClick={btn.action}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 hover:bg-slate-50 transition-colors text-sm font-medium ${btn.active ? "text-rose-500" : "text-slate-500"}`}>
+            <i className={btn.icon}></i><span>{btn.label}</span>
+          </button>
+        ))}
+      </div>
+      {showComments && (
+        <div className="border-t border-slate-100 p-4 space-y-3">
+          {post.comments.map((c) => (
+            <div key={c.id} className="flex gap-2">
+              <img src={c.userAvatar || avatarUrl(c.userName)} alt={c.userName} className="w-7 h-7 rounded-full flex-shrink-0 object-cover" />
+              <div className="flex-1 bg-slate-50 rounded-2xl px-3 py-2">
+                <p className="text-xs font-bold text-slate-900">{c.userName}</p>
+                <p className="text-xs text-slate-700 mt-0.5">{c.content}</p>
+              </div>
+            </div>
+          ))}
+          <div className="flex gap-2 pt-1">
+            <img src={currentUser.photoURL || avatarUrl(currentUser.displayName)} alt="" className="w-7 h-7 rounded-full flex-shrink-0 object-cover" />
+            <div className="flex-1 flex gap-2">
+              <input value={commentText} onChange={(e) => setCommentText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && commentText.trim()) { onComment(post.id, commentText); setCommentText(""); } }}
+                placeholder="Write a comment…"
+                className="flex-1 bg-slate-100 rounded-full px-4 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+              <button onClick={() => { if (commentText.trim()) { onComment(post.id, commentText); setCommentText(""); } }}
+                disabled={!commentText.trim()}
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded-full text-xs font-semibold hover:bg-indigo-700 disabled:opacity-40">
+                Post
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Community() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
+  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [activeTab, setActiveTab] = useState("feed");
-  const [postContent, setPostContent] = useState("");
+  const [friendSearch, setFriendSearch] = useState("");
+  const [discoverSearch, setDiscoverSearch] = useState("");
+
   const [showCreatePost, setShowCreatePost] = useState(false);
-  const [selectedPost, setSelectedPost] = useState<string | null>(null);
-  const [commentText, setCommentText] = useState("");
-  const [selectedChat, setSelectedChat] = useState<ChatUser | null>(null);
-  const [messageText, setMessageText] = useState("");
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [viewingProfile, setViewingProfile] = useState<UserProfile | null>(null);
+  const [viewingGroup, setViewingGroup] = useState<Group | null>(null);
+
+  const [selectedChat, setSelectedChat] = useState<UserProfile | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [messageText, setMessageText] = useState("");
+  const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  const stories: Story[] = [
-    { id: "1", userId: "1", userName: "Your Story", userAvatar: "", image: "" },
-    { id: "2", userId: "2", userName: "Sarah Johnson", userAvatar: "https://ui-avatars.com/api/?name=Sarah+Johnson&background=6366f1&color=fff", image: "" },
-    { id: "3", userId: "3", userName: "Michael Chen", userAvatar: "https://ui-avatars.com/api/?name=Michael+Chen&background=8b5cf6&color=fff", image: "" },
-    { id: "4", userId: "4", userName: "Emily Rodriguez", userAvatar: "https://ui-avatars.com/api/?name=Emily+Rodriguez&background=ec4899&color=fff", image: "" },
-    { id: "5", userId: "5", userName: "David Okonkwo", userAvatar: "https://ui-avatars.com/api/?name=David+Okonkwo&background=10b981&color=fff", image: "" },
-  ];
-
-  const chatUsers: ChatUser[] = [
-    { id: "1", name: "Sarah Johnson", avatar: "https://ui-avatars.com/api/?name=Sarah+Johnson&background=6366f1&color=fff", lastMessage: "Hey! How are you?", time: "2m ago", unread: 2, online: true },
-    { id: "2", name: "Michael Chen", avatar: "https://ui-avatars.com/api/?name=Michael+Chen&background=8b5cf6&color=fff", lastMessage: "Thanks for the help!", time: "1h ago", unread: 0, online: true },
-    { id: "3", name: "Emily Rodriguez", avatar: "https://ui-avatars.com/api/?name=Emily+Rodriguez&background=ec4899&color=fff", lastMessage: "See you tomorrow!", time: "3h ago", unread: 1, online: false },
-    { id: "4", name: "David Okonkwo", avatar: "https://ui-avatars.com/api/?name=David+Okonkwo&background=10b981&color=fff", lastMessage: "Got it, thanks!", time: "1d ago", unread: 0, online: true },
-    { id: "5", name: "Aisha Ndiaye", avatar: "https://ui-avatars.com/api/?name=Aisha+Ndiaye&background=f59e0b&color=fff", lastMessage: "Looking forward to it", time: "2d ago", unread: 0, online: false },
-  ];
+  const pendingRequests = friendRequests.filter((r) => r.toId === currentUser?.uid && r.status === "pending");
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-        setUser({
-          uid: currentUser.uid,
-          displayName: userDoc.data()?.name || currentUser.displayName || "User",
-          photoURL: userDoc.data()?.photoURL || currentUser.photoURL,
-        });
-        await fetchPosts();
-        setLoading(false);
-      } else {
-        router.push("/login");
-      }
+    const unsub = onAuthStateChanged(auth, async (fu) => {
+      if (!fu) { router.push("/login"); return; }
+      const ud = (await getDoc(doc(db, "users", fu.uid))).data() || {};
+      setCurrentUser({
+        uid: fu.uid,
+        displayName: ud.name || fu.displayName || "User",
+        photoURL: ud.photoURL || fu.photoURL || undefined,
+        title: ud.title, bio: ud.bio, careerGoal: ud.careerGoal,
+        skills: ud.skills || [], friends: ud.friends || [],
+      });
+      await Promise.all([fetchPosts(), fetchAllUsers(), fetchGroups(), fetchFriendRequests(fu.uid)]);
+      setLoading(false);
     });
-
-    return () => unsubscribe();
+    return () => unsub();
   }, [router]);
+
+  useEffect(() => { chatBottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   const fetchPosts = async () => {
     try {
-      const postsQuery = query(
-        collection(db, "posts"),
-        orderBy("createdAt", "desc"),
-        limit(20)
-      );
-      const snapshot = await getDocs(postsQuery);
-
-      const postsData: Post[] = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        userId: doc.data().userId || "",
-        userName: doc.data().userName || "Anonymous",
-        userAvatar: doc.data().userAvatar,
-        content: doc.data().content || "",
-        image: doc.data().image,
-        likes: doc.data().likes || [],
-        comments: doc.data().comments || [],
-        createdAt: doc.data().createdAt,
-      }));
-
-      setPosts(postsData);
-    } catch (error) {
-      console.error("Error fetching posts:", error);
-    }
+      const snap = await getDocs(query(collection(db, "posts"), orderBy("createdAt", "desc"), limit(30)));
+      setPosts(snap.docs.map((d) => ({
+        id: d.id, userId: d.data().userId || "", userName: d.data().userName || "Anonymous",
+        userAvatar: d.data().userAvatar, userTitle: d.data().userTitle,
+        content: d.data().content || "", mediaUrl: d.data().mediaUrl, mediaType: d.data().mediaType,
+        likes: d.data().likes || [], comments: d.data().comments || [], createdAt: d.data().createdAt,
+      })));
+    } catch (e) { console.error(e); }
   };
 
-  const handleCreatePost = async () => {
-    if (!postContent.trim() || !user) return;
-
+  const fetchAllUsers = async () => {
     try {
-      await addDoc(collection(db, "posts"), {
-        userId: user.uid,
-        userName: user.displayName,
-        userAvatar: user.photoURL,
-        content: postContent,
-        likes: [],
-        comments: [],
-        createdAt: serverTimestamp(),
+      const snap = await getDocs(collection(db, "users"));
+      setAllUsers(snap.docs.map((d) => ({
+        uid: d.id,
+        displayName: d.data().fullName || d.data().displayName || "User",
+        photoURL: d.data().photoURL, title: d.data().title, bio: d.data().bio,
+        careerGoal: d.data().careerGoal, skills: d.data().skills || [], friends: d.data().friends || [],
+      })));
+    } catch (e) { console.error(e); }
+  };
+
+  const fetchGroups = async () => {
+    try {
+      const snap = await getDocs(query(collection(db, "groups"), orderBy("createdAt", "desc")));
+      setGroups(snap.docs.map((d) => ({
+        id: d.id, name: d.data().name || "", description: d.data().description || "",
+        coverColor: d.data().coverColor || GROUP_COLORS[0],
+        memberIds: d.data().memberIds || [], adminId: d.data().adminId || "", createdAt: d.data().createdAt,
+      })));
+    } catch (e) { console.error(e); }
+  };
+
+  const fetchFriendRequests = async (uid: string) => {
+    try {
+      const snap = await getDocs(query(collection(db, "friendRequests"), where("toId", "==", uid), where("status", "==", "pending")));
+      setFriendRequests(snap.docs.map((d) => ({
+        id: d.id, fromId: d.data().fromId, fromName: d.data().fromName,
+        fromAvatar: d.data().fromAvatar, fromTitle: d.data().fromTitle,
+        toId: d.data().toId, status: d.data().status, createdAt: d.data().createdAt,
+      })));
+    } catch (e) { console.error(e); }
+  };
+
+  const loadMessages = async (uid: string) => {
+    const chatId = [currentUser!.uid, uid].sort().join("_");
+    try {
+      const snap = await getDocs(query(collection(db, "chats", chatId, "messages"), orderBy("timestamp", "asc"), limit(50)));
+      setMessages(snap.docs.map((d) => ({
+        id: d.id, senderId: d.data().senderId, content: d.data().content,
+        timestamp: d.data().timestamp?.toDate() || new Date(),
+      })));
+    } catch { setMessages([]); }
+  };
+
+  const handleCreatePost = async (content: string, mediaUrl?: string, mediaType?: "image" | "video") => {
+    if (!currentUser) return;
+    await addDoc(collection(db, "posts"), {
+      userId: currentUser.uid, userName: currentUser.displayName,
+      userAvatar: currentUser.photoURL || null, userTitle: currentUser.title || null,
+      content, mediaUrl: mediaUrl || null, mediaType: mediaType || null,
+      likes: [], comments: [], createdAt: serverTimestamp(),
+    });
+    await fetchPosts();
+  };
+
+  const handleLike = async (postId: string) => {
+    if (!currentUser) return;
+    const post = posts.find((p) => p.id === postId);
+    const liked = post?.likes.includes(currentUser.uid);
+    await updateDoc(doc(db, "posts", postId), { likes: liked ? arrayRemove(currentUser.uid) : arrayUnion(currentUser.uid) });
+    await fetchPosts();
+  };
+
+  const handleComment = async (postId: string, text: string) => {
+    if (!currentUser) return;
+    await updateDoc(doc(db, "posts", postId), {
+      comments: arrayUnion({
+        id: Date.now().toString(), userId: currentUser.uid, userName: currentUser.displayName,
+        userAvatar: currentUser.photoURL || null, content: text, createdAt: new Date(),
+      }),
+    });
+    await fetchPosts();
+  };
+
+  const handleFriendAction = async (targetId: string, action: "send" | "unfriend") => {
+    if (!currentUser) return;
+    if (action === "send") {
+      const target = allUsers.find((u) => u.uid === targetId);
+      await addDoc(collection(db, "friendRequests"), {
+        fromId: currentUser.uid, fromName: currentUser.displayName,
+        fromAvatar: currentUser.photoURL || null, fromTitle: currentUser.title || null,
+        toId: targetId, status: "pending", createdAt: serverTimestamp(),
       });
-
-      setPostContent("");
-      setShowCreatePost(false);
-      await fetchPosts();
-    } catch (error) {
-      console.error("Error creating post:", error);
-      alert("Failed to create post. Please try again.");
+    } else {
+      await updateDoc(doc(db, "users", currentUser.uid), { friends: arrayRemove(targetId) });
+      await updateDoc(doc(db, "users", targetId), { friends: arrayRemove(currentUser.uid) });
+      setCurrentUser((p) => p ? { ...p, friends: p.friends?.filter((id) => id !== targetId) } : p);
     }
   };
 
-  const handleLikePost = async (postId: string) => {
-    if (!user) return;
-
-    try {
-      const postRef = doc(db, "posts", postId);
-      const post = posts.find((p) => p.id === postId);
-
-      if (post?.likes.includes(user.uid)) {
-        await updateDoc(postRef, {
-          likes: arrayRemove(user.uid),
-        });
-      } else {
-        await updateDoc(postRef, {
-          likes: arrayUnion(user.uid),
-        });
-      }
-
-      await fetchPosts();
-    } catch (error) {
-      console.error("Error liking post:", error);
+  const handleRespondRequest = async (req: FriendRequest, accept: boolean) => {
+    await updateDoc(doc(db, "friendRequests", req.id), { status: accept ? "accepted" : "declined" });
+    if (accept && currentUser) {
+      await updateDoc(doc(db, "users", currentUser.uid), { friends: arrayUnion(req.fromId) });
+      await updateDoc(doc(db, "users", req.fromId), { friends: arrayUnion(currentUser.uid) });
+      setCurrentUser((p) => p ? { ...p, friends: [...(p.friends || []), req.fromId] } : p);
     }
+    setFriendRequests((p) => p.filter((r) => r.id !== req.id));
   };
 
-  const handleComment = async (postId: string) => {
-    if (!commentText.trim() || !user) return;
-
-    try {
-      const postRef = doc(db, "posts", postId);
-      const newComment = {
-        id: Date.now().toString(),
-        userId: user.uid,
-        userName: user.displayName,
-        content: commentText,
-        createdAt: new Date(),
-      };
-
-      await updateDoc(postRef, {
-        comments: arrayUnion(newComment),
-      });
-
-      setCommentText("");
-      await fetchPosts();
-    } catch (error) {
-      console.error("Error commenting:", error);
-    }
+  const handleCreateGroup = async (name: string, desc: string, color: string, memberIds: string[]) => {
+    if (!currentUser) return;
+    await addDoc(collection(db, "groups"), {
+      name, description: desc, coverColor: color,
+      memberIds: [currentUser.uid, ...memberIds], adminId: currentUser.uid, createdAt: serverTimestamp(),
+    });
+    await fetchGroups();
   };
 
-  const handleSendMessage = () => {
-    if (!messageText.trim() || !selectedChat) return;
+  const handleAddMember = async (gid: string, uid: string) => {
+    await updateDoc(doc(db, "groups", gid), { memberIds: arrayUnion(uid) });
+    await fetchGroups();
+    setViewingGroup((p) => p && p.id === gid ? { ...p, memberIds: [...p.memberIds, uid] } : p);
+  };
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      senderId: user.uid,
-      content: messageText,
-      timestamp: new Date(),
-      read: false,
-    };
+  const handleLeaveGroup = async (gid: string) => {
+    if (!currentUser) return;
+    await updateDoc(doc(db, "groups", gid), { memberIds: arrayRemove(currentUser.uid) });
+    await fetchGroups();
+  };
 
-    setMessages([...messages, newMessage]);
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !selectedChat || !currentUser) return;
+    const chatId = [currentUser.uid, selectedChat.uid].sort().join("_");
+    await addDoc(collection(db, "chats", chatId, "messages"), {
+      senderId: currentUser.uid, content: messageText.trim(), timestamp: serverTimestamp(),
+    });
+    setMessages((p) => [...p, { id: Date.now().toString(), senderId: currentUser.uid, content: messageText.trim(), timestamp: new Date() }]);
     setMessageText("");
   };
 
-  const handleSelectChat = (chatUser: ChatUser) => {
-    setSelectedChat(chatUser);
-    setMessages([
-      { id: "1", senderId: chatUser.id, content: chatUser.lastMessage, timestamp: new Date(Date.now() - 3600000), read: true },
-      { id: "2", senderId: user.uid, content: "Thanks! I appreciate it.", timestamp: new Date(Date.now() - 1800000), read: true },
-    ]);
+  const openChat = (friend: UserProfile) => {
+    setSelectedChat(friend);
+    loadMessages(friend.uid);
+    setActiveTab("chat");
   };
 
-  if (loading) {
+  const getMutualCount = (friend: UserProfile) => {
+    if (!currentUser?.friends) return 0;
+    return (friend.friends || []).filter((fid) => currentUser.friends!.includes(fid)).length;
+  };
+
+  const friends = allUsers.filter((u) => currentUser?.friends?.includes(u.uid));
+  const filteredFriends = friends.filter((f) =>
+    f.displayName.toLowerCase().includes(friendSearch.toLowerCase()) ||
+    f.title?.toLowerCase().includes(friendSearch.toLowerCase()) ||
+    f.careerGoal?.toLowerCase().includes(friendSearch.toLowerCase()) ||
+    f.skills?.some((s) => s.toLowerCase().includes(friendSearch.toLowerCase()))
+  );
+  const nonFriends = allUsers.filter((u) => u.uid !== currentUser?.uid && !currentUser?.friends?.includes(u.uid));
+  const filteredDiscover = nonFriends.filter((u) =>
+    u.displayName.toLowerCase().includes(discoverSearch.toLowerCase()) ||
+    u.title?.toLowerCase().includes(discoverSearch.toLowerCase()) ||
+    u.careerGoal?.toLowerCase().includes(discoverSearch.toLowerCase())
+  );
+
+  if (loading || !currentUser) {
     return (
       <main className="flex-1 flex bg-slate-50 min-w-0 items-center justify-center">
-        <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+        <div className="w-14 h-14 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
       </main>
     );
   }
 
+  const TABS = [
+    { id: "feed", label: "Feed", icon: "fa-house" },
+    { id: "friends", label: "Friends", icon: "fa-user-group", badge: pendingRequests.length },
+    { id: "groups", label: "Groups", icon: "fa-users" },
+    { id: "chat", label: "Messages", icon: "fa-comment" },
+  ];
+
   return (
     <main className="flex-1 flex bg-slate-50 min-w-0">
       <SideBar />
-      
       <section className="flex-1 overflow-y-auto">
         <div className="max-w-7xl mx-auto p-6">
-          {/* Header */}
-          <div className="mb-6">
+          <div className="mb-5">
             <h1 className="text-3xl font-bold text-slate-900">Community</h1>
-            <p className="text-slate-600 mt-1">Connect, share, and learn together</p>
+            <p className="text-slate-500 mt-1 text-sm">Connect, share, and learn together</p>
           </div>
-          <BottomBar/>
+          <BottomBar />
 
           {/* Tabs */}
-          <div className="mb-6 border-b border-slate-200">
-            <div className="flex gap-6">
-              <button
-                onClick={() => setActiveTab("feed")}
-                className={`pb-3 px-1 font-semibold transition-colors relative ${
-                  activeTab === "feed"
-                    ? "text-indigo-600"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Feed
-                {activeTab === "feed" && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>
-                )}
+          <div className="flex gap-1 bg-white rounded-2xl border border-slate-100 p-1 mb-6 w-fit shadow-sm">
+            {TABS.map((tab) => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                className={`relative flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${activeTab === tab.id ? "bg-indigo-600 text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"}`}>
+                <i className={`fa-solid ${tab.icon} text-xs`}></i>
+                {tab.label}
+                {tab.badge ? <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">{tab.badge}</span> : null}
               </button>
-              <button
-                onClick={() => setActiveTab("chat")}
-                className={`pb-3 px-1 font-semibold transition-colors relative ${
-                  activeTab === "chat"
-                    ? "text-indigo-600"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Messages
-                {activeTab === "chat" && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab("groups")}
-                className={`pb-3 px-1 font-semibold transition-colors relative ${
-                  activeTab === "groups"
-                    ? "text-indigo-600"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Groups
-                {activeTab === "groups" && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab("events")}
-                className={`pb-3 px-1 font-semibold transition-colors relative ${
-                  activeTab === "events"
-                    ? "text-indigo-600"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Events
-                {activeTab === "events" && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>
-                )}
-              </button>
-            </div>
+            ))}
           </div>
 
-          {/* Feed Tab */}
+          {/* ── FEED ── */}
           {activeTab === "feed" && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
-                {/* Stories */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-                  <div className="flex gap-3 overflow-x-auto pb-2">
-                    {stories.map((story) => (
-                      <div key={story.id} className="flex-shrink-0">
-                        <div className="relative cursor-pointer group">
-                          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-pink-500 via-purple-500 to-indigo-500 p-0.5">
-                            <div className="w-full h-full rounded-full bg-white p-1">
-                              <img
-                                src={story.userAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(story.userName)}&background=6366f1&color=fff`}
-                                alt={story.userName}
-                                className="w-full h-full rounded-full object-cover"
-                              />
-                            </div>
-                          </div>
-                          {story.userId === "1" && (
-                            <div className="absolute bottom-0 right-0 w-6 h-6 bg-indigo-600 rounded-full border-2 border-white flex items-center justify-center">
-                              <i className="fa-solid fa-plus text-white text-xs"></i>
-                            </div>
-                          )}
-                        </div>
-                        <p className="text-xs text-center mt-2 text-slate-700 font-medium w-20 truncate">
-                          {story.userName}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Create Post */}
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-                  <div className="flex items-center gap-3 mb-4">
-                    <img
-                      src={user?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.displayName)}&background=6366f1&color=fff`}
-                      alt={user?.displayName}
-                      className="w-10 h-10 rounded-full object-cover"
-                    />
-                    <button
-                      onClick={() => setShowCreatePost(true)}
-                      className="flex-1 bg-slate-100 hover:bg-slate-200 rounded-full px-4 py-2.5 text-left text-slate-600 transition-colors"
-                    >
-                      What's on your mind, {user?.displayName?.split(" ")[0]}?
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+                  <div className="flex items-center gap-3">
+                    <img src={currentUser.photoURL || avatarUrl(currentUser.displayName)} alt="" className="w-10 h-10 rounded-full object-cover" />
+                    <button onClick={() => setShowCreatePost(true)}
+                      className="flex-1 bg-slate-100 hover:bg-slate-200 rounded-full px-4 py-2.5 text-left text-slate-500 text-sm transition-colors">
+                      What's on your mind, {currentUser.displayName.split(" ")[0]}?
                     </button>
                   </div>
-                  <div className="flex items-center justify-around border-t border-slate-200 pt-3">
-                    <button className="flex items-center gap-2 px-4 py-2 hover:bg-slate-100 rounded-lg transition-colors">
-                      <i className="fa-solid fa-video text-red-500"></i>
-                      <span className="text-sm font-medium text-slate-700">Live</span>
-                    </button>
-                    <button className="flex items-center gap-2 px-4 py-2 hover:bg-slate-100 rounded-lg transition-colors">
-                      <i className="fa-solid fa-image text-green-500"></i>
-                      <span className="text-sm font-medium text-slate-700">Photo</span>
-                    </button>
-                    <button className="flex items-center gap-2 px-4 py-2 hover:bg-slate-100 rounded-lg transition-colors">
-                      <i className="fa-solid fa-smile text-yellow-500"></i>
-                      <span className="text-sm font-medium text-slate-700">Feeling</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Create Post Modal */}
-                {showCreatePost && (
-                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl max-w-lg w-full p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-xl font-bold text-slate-900">Create Post</h3>
-                        <button
-                          onClick={() => setShowCreatePost(false)}
-                          className="w-8 h-8 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center"
-                        >
-                          <i className="fa-solid fa-xmark text-slate-600"></i>
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-3 mb-4">
-                        <img
-                          src={user?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.displayName)}&background=6366f1&color=fff`}
-                          alt={user?.displayName}
-                          className="w-10 h-10 rounded-full object-cover"
-                        />
-                        <div>
-                          <p className="font-semibold text-slate-900">{user?.displayName}</p>
-                          <p className="text-xs text-slate-500">Public</p>
-                        </div>
-                      </div>
-                      <textarea
-                        value={postContent}
-                        onChange={(e) => setPostContent(e.target.value)}
-                        placeholder={`What's on your mind, ${user?.displayName?.split(" ")[0]}?`}
-                        className="w-full min-h-32 p-3 text-slate-900 placeholder-slate-400 focus:outline-none resize-none"
-                      />
-                      <button
-                        onClick={handleCreatePost}
-                        disabled={!postContent.trim()}
-                        className="w-full mt-4 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
-                      >
-                        Post
+                  <div className="flex items-center justify-around mt-3 pt-3 border-t border-slate-100">
+                    {[{ icon: "fa-image", label: "Photo", color: "text-green-500" }, { icon: "fa-video", label: "Video", color: "text-red-500" }, { icon: "fa-face-smile", label: "Feeling", color: "text-yellow-500" }].map((btn) => (
+                      <button key={btn.label} onClick={() => setShowCreatePost(true)}
+                        className="flex items-center gap-2 px-4 py-2 hover:bg-slate-100 rounded-xl transition-colors">
+                        <i className={`fa-solid ${btn.icon} ${btn.color} text-sm`}></i>
+                        <span className="text-sm font-medium text-slate-600">{btn.label}</span>
                       </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Posts Feed */}
-                {posts.length > 0 ? (
-                  <div className="space-y-4">
-                    {posts.map((post) => (
-                      <div key={post.id} className="bg-white rounded-xl shadow-sm border border-slate-200">
-                        <div className="p-4">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-3">
-                              <img
-                                src={post.userAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(post.userName)}&background=6366f1&color=fff`}
-                                alt={post.userName}
-                                className="w-10 h-10 rounded-full object-cover"
-                              />
-                              <div>
-                                <p className="font-semibold text-slate-900">{post.userName}</p>
-                                <p className="text-xs text-slate-500">
-                                  {post.createdAt?.toDate?.()?.toLocaleDateString() || "Just now"}
-                                </p>
-                              </div>
-                            </div>
-                            <button className="w-8 h-8 hover:bg-slate-100 rounded-full flex items-center justify-center">
-                              <i className="fa-solid fa-ellipsis text-slate-600"></i>
-                            </button>
-                          </div>
-                          <p className="text-slate-900 mb-3 whitespace-pre-wrap">{post.content}</p>
-                          {post.image && (
-                            <img
-                              src={post.image}
-                              alt="Post"
-                              className="w-full rounded-lg object-cover mb-3"
-                            />
-                          )}
-                        </div>
-
-                        <div className="px-4 py-2 border-t border-slate-200">
-                          <div className="flex items-center justify-between text-sm text-slate-600 mb-2">
-                            <span>{post.likes.length} likes</span>
-                            <span>{post.comments.length} comments</span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-around border-t border-slate-200 py-2 px-4">
-                          <button
-                            onClick={() => handleLikePost(post.id)}
-                            className={`flex items-center gap-2 px-4 py-2 hover:bg-slate-100 rounded-lg transition-colors ${
-                              post.likes.includes(user?.uid) ? "text-indigo-600" : "text-slate-600"
-                            }`}
-                          >
-                            <i className={`fa-${post.likes.includes(user?.uid) ? "solid" : "regular"} fa-heart`}></i>
-                            <span className="text-sm font-medium">Like</span>
-                          </button>
-                          <button
-                            onClick={() => setSelectedPost(selectedPost === post.id ? null : post.id)}
-                            className="flex items-center gap-2 px-4 py-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-600"
-                          >
-                            <i className="fa-regular fa-comment"></i>
-                            <span className="text-sm font-medium">Comment</span>
-                          </button>
-                          <button className="flex items-center gap-2 px-4 py-2 hover:bg-slate-100 rounded-lg transition-colors text-slate-600">
-                            <i className="fa-regular fa-share-from-square"></i>
-                            <span className="text-sm font-medium">Share</span>
-                          </button>
-                        </div>
-
-                        {selectedPost === post.id && (
-                          <div className="border-t border-slate-200 p-4">
-                            <div className="flex gap-2 mb-4">
-                              <img
-                                src={user?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.displayName)}&background=6366f1&color=fff`}
-                                alt={user?.displayName}
-                                className="w-8 h-8 rounded-full object-cover"
-                              />
-                              <div className="flex-1 flex gap-2">
-                                <input
-                                  type="text"
-                                  value={commentText}
-                                  onChange={(e) => setCommentText(e.target.value)}
-                                  onKeyPress={(e) => e.key === "Enter" && handleComment(post.id)}
-                                  placeholder="Write a comment..."
-                                  className="flex-1 bg-slate-100 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                />
-                                <button
-                                  onClick={() => handleComment(post.id)}
-                                  disabled={!commentText.trim()}
-                                  className="px-4 py-2 bg-indigo-600 text-white rounded-full text-sm font-medium hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed"
-                                >
-                                  Post
-                                </button>
-                              </div>
-                            </div>
-                            {post.comments.length > 0 && (
-                              <div className="space-y-3">
-                                {post.comments.map((comment) => (
-                                  <div key={comment.id} className="flex gap-2">
-                                    <img
-                                      src={`https://ui-avatars.com/api/?name=${encodeURIComponent(comment.userName)}&background=6366f1&color=fff`}
-                                      alt={comment.userName}
-                                      className="w-8 h-8 rounded-full"
-                                    />
-                                    <div className="flex-1 bg-slate-100 rounded-2xl px-4 py-2">
-                                      <p className="text-sm font-semibold text-slate-900">{comment.userName}</p>
-                                      <p className="text-sm text-slate-700">{comment.content}</p>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
                     ))}
                   </div>
-                ) : (
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
-                    <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <i className="fa-solid fa-comments text-slate-400 text-3xl"></i>
+                </div>
+                {posts.length > 0 ? posts.map((post) => (
+                  <PostCard key={post.id} post={post} currentUser={currentUser}
+                    onLike={handleLike} onComment={handleComment} onViewProfile={(uid) => setViewingProfile(allUsers.find((u) => u.uid === uid) || null)} />
+                )) : (
+                  <div className="bg-white rounded-2xl border border-slate-100 p-12 text-center">
+                    <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <i className="fa-solid fa-comments text-indigo-400 text-2xl"></i>
                     </div>
-                    <h3 className="text-xl font-bold text-slate-900 mb-2">No posts yet</h3>
-                    <p className="text-slate-600 mb-6">Be the first to share something!</p>
-                    <button
-                      onClick={() => setShowCreatePost(true)}
-                      className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700"
-                    >
-                      Create Post
-                    </button>
+                    <h3 className="font-bold text-slate-900 mb-1">No posts yet</h3>
+                    <p className="text-slate-500 text-sm mb-4">Be the first to share something!</p>
+                    <button onClick={() => setShowCreatePost(true)} className="px-5 py-2.5 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700">Create Post</button>
                   </div>
                 )}
               </div>
-
-              {/* Right Sidebar */}
               <div className="hidden lg:block space-y-4">
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 sticky top-6">
-                  <h3 className="font-bold text-slate-900 mb-4">Online Friends</h3>
-                  <div className="space-y-3">
-                    {chatUsers.filter(u => u.online).slice(0, 5).map((chatUser) => (
-                      <div key={chatUser.id} className="flex items-center gap-3 p-2 hover:bg-slate-100 rounded-lg cursor-pointer">
-                        <div className="relative">
-                          <img
-                            src={chatUser.avatar}
-                            alt={chatUser.name}
-                            className="w-9 h-9 rounded-full"
-                          />
-                          <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+                {pendingRequests.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+                    <h3 className="font-bold text-slate-900 mb-3 text-sm">Friend Requests <span className="text-indigo-600">({pendingRequests.length})</span></h3>
+                    <div className="space-y-3">
+                      {pendingRequests.map((req) => (
+                        <div key={req.id} className="flex items-center gap-3">
+                          <img src={req.fromAvatar || avatarUrl(req.fromName)} alt={req.fromName} className="w-9 h-9 rounded-full object-cover cursor-pointer"
+                            onClick={() => setViewingProfile(allUsers.find((u) => u.uid === req.fromId) || null)} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-slate-900 truncate">{req.fromName}</p>
+                            {req.fromTitle && <p className="text-xs text-slate-400 truncate">{req.fromTitle}</p>}
+                          </div>
+                          <div className="flex gap-1.5">
+                            <button onClick={() => handleRespondRequest(req, true)} className="w-7 h-7 bg-indigo-600 text-white rounded-full flex items-center justify-center text-xs hover:bg-indigo-700"><i className="fa-solid fa-check"></i></button>
+                            <button onClick={() => handleRespondRequest(req, false)} className="w-7 h-7 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center text-xs hover:bg-slate-200"><i className="fa-solid fa-xmark"></i></button>
+                          </div>
                         </div>
-                        <span className="text-sm font-medium text-slate-700">{chatUser.name}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+                  <h3 className="font-bold text-slate-900 mb-3 text-sm">Friends ({friends.length})</h3>
+                  {friends.length > 0 ? (
+                    <div className="space-y-2">
+                      {friends.slice(0, 6).map((f) => (
+                        <div key={f.uid} className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-slate-50 cursor-pointer" onClick={() => setViewingProfile(f)}>
+                          <div className="relative">
+                            <img src={f.photoURL || avatarUrl(f.displayName)} alt={f.displayName} className="w-8 h-8 rounded-full object-cover" />
+                            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 rounded-full border-2 border-white"></div>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-slate-700 truncate">{f.displayName}</p>
+                            {f.title && <p className="text-xs text-slate-400 truncate">{f.title}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="text-xs text-slate-400 text-center py-2">No friends yet.</p>}
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4">
+                  <h3 className="font-bold text-slate-900 mb-3 text-sm">People You May Know</h3>
+                  <div className="space-y-3">
+                    {nonFriends.slice(0, 4).map((u) => (
+                      <div key={u.uid} className="flex items-center gap-3">
+                        <img src={u.photoURL || avatarUrl(u.displayName)} alt={u.displayName} className="w-9 h-9 rounded-full object-cover cursor-pointer" onClick={() => setViewingProfile(u)} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-slate-900 truncate cursor-pointer hover:text-indigo-600" onClick={() => setViewingProfile(u)}>{u.displayName}</p>
+                          {u.title && <p className="text-xs text-slate-400 truncate">{u.title}</p>}
+                        </div>
+                        <button onClick={() => handleFriendAction(u.uid, "send")} className="px-2.5 py-1 bg-indigo-50 text-indigo-600 text-xs font-semibold rounded-lg hover:bg-indigo-100">+ Add</button>
                       </div>
                     ))}
                   </div>
@@ -574,192 +990,282 @@ export default function Community() {
             </div>
           )}
 
-          {/* Chat Tab */}
-          {activeTab === "chat" && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-250px)]">
-              {/* Chat List */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-4 border-b border-slate-200">
-                  <h2 className="text-xl font-bold text-slate-900 mb-3">Messages</h2>
-                  <div className="relative">
-                    <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
-                    <input
-                      type="text"
-                      placeholder="Search messages..."
-                      className="w-full pl-10 pr-4 py-2 bg-slate-100 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
+          {/* ── FRIENDS TAB ── */}
+          {activeTab === "friends" && (
+            <div className="space-y-6 max-w-5xl">
+              {/* Pending requests */}
+              {pendingRequests.length > 0 && (
+                <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+                  <h2 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
+                    <span className="w-6 h-6 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-bold">{pendingRequests.length}</span>
+                    Friend Requests
+                  </h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {pendingRequests.map((req) => {
+                      const reqProfile = allUsers.find((u) => u.uid === req.fromId);
+                      return (
+                        <div key={req.id} className="flex items-start gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                          <img src={req.fromAvatar || avatarUrl(req.fromName)} alt={req.fromName}
+                            className="w-12 h-12 rounded-full object-cover cursor-pointer flex-shrink-0"
+                            onClick={() => reqProfile && setViewingProfile(reqProfile)} />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-slate-900 text-sm">{req.fromName}</p>
+                            {req.fromTitle && <p className="text-xs text-indigo-500 truncate">{req.fromTitle}</p>}
+                            {reqProfile?.careerGoal && (
+                              <p className="text-xs text-slate-400 capitalize mt-0.5">{reqProfile.careerGoal.replace("-", " ")}</p>
+                            )}
+                            <p className="text-xs text-slate-400 mt-1">{timeAgo(req.createdAt)}</p>
+                            <div className="flex gap-2 mt-2">
+                              <button onClick={() => handleRespondRequest(req, true)}
+                                className="flex-1 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700">Accept</button>
+                              <button onClick={() => handleRespondRequest(req, false)}
+                                className="flex-1 py-1.5 bg-slate-200 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-300">Decline</button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-                <div className="overflow-y-auto h-[calc(100%-120px)]">
-                  {chatUsers.map((chatUser) => (
-                    <div
-                      key={chatUser.id}
-                      onClick={() => handleSelectChat(chatUser)}
-                      className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${
-                        selectedChat?.id === chatUser.id ? "bg-indigo-50" : "hover:bg-slate-50"
-                      }`}
-                    >
-                      <div className="relative">
-                        <img
-                          src={chatUser.avatar}
-                          alt={chatUser.name}
-                          className="w-12 h-12 rounded-full"
-                        />
-                        {chatUser.online && (
-                          <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white"></div>
+              )}
+
+              {/* Your friends */}
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="font-bold text-slate-900">
+                    Your Friends
+                    <span className="ml-2 text-indigo-600 font-normal">({filteredFriends.length})</span>
+                  </h2>
+                  {/* Search */}
+                  <div className="relative">
+                    <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input value={friendSearch} onChange={(e) => setFriendSearch(e.target.value)}
+                      placeholder="Search friends…"
+                      className="pl-8 pr-4 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400 w-44" />
+                  </div>
+                </div>
+
+                {filteredFriends.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredFriends.map((f) => (
+                      <FriendCard
+                        key={f.uid}
+                        friend={f}
+                        currentUser={currentUser}
+                        mutualCount={getMutualCount(f)}
+                        onViewProfile={(uid) => setViewingProfile(allUsers.find((u) => u.uid === uid) || null)}
+                        onMessage={openChat}
+                        onUnfriend={(uid) => handleFriendAction(uid, "unfriend")}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-10">
+                    <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <i className="fa-solid fa-user-group text-slate-400 text-xl"></i>
+                    </div>
+                    <p className="text-slate-500 text-sm">
+                      {friendSearch ? "No friends match your search." : "You haven't added any friends yet."}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Discover */}
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="font-bold text-slate-900">
+                    Discover People
+                    <span className="ml-2 text-slate-400 font-normal text-sm">({filteredDiscover.length})</span>
+                  </h2>
+                  <div className="relative">
+                    <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input value={discoverSearch} onChange={(e) => setDiscoverSearch(e.target.value)}
+                      placeholder="Search people…"
+                      className="pl-8 pr-4 py-2 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400 w-44" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {filteredDiscover.map((u) => (
+                    <div key={u.uid} className="flex items-center gap-3 p-3 border border-slate-100 rounded-2xl hover:border-indigo-200 hover:bg-indigo-50/30 transition-all">
+                      <img src={u.photoURL || avatarUrl(u.displayName)} alt={u.displayName}
+                        className="w-12 h-12 rounded-full object-cover cursor-pointer flex-shrink-0"
+                        onClick={() => setViewingProfile(u)} />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-slate-900 text-sm truncate cursor-pointer hover:text-indigo-600" onClick={() => setViewingProfile(u)}>{u.displayName}</p>
+                        {u.title && <p className="text-xs text-indigo-500 truncate">{u.title}</p>}
+                        {u.careerGoal && (
+                          <p className="text-xs text-slate-400 capitalize mt-0.5">
+                            {CAREER_ICONS[u.careerGoal] || "💼"} {u.careerGoal.replace("-", " ")}
+                          </p>
+                        )}
+                        {u.skills && u.skills.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1.5">
+                            {u.skills.slice(0, 2).map((s) => (
+                              <span key={s} className="px-1.5 py-0.5 bg-slate-100 text-slate-500 text-xs rounded-full">{s}</span>
+                            ))}
+                            {u.skills.length > 2 && <span className="text-xs text-slate-400">+{u.skills.length - 2}</span>}
+                          </div>
                         )}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <h3 className="font-semibold text-slate-900 truncate">{chatUser.name}</h3>
-                          <span className="text-xs text-slate-500">{chatUser.time}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <p className="text-sm text-slate-600 truncate">{chatUser.lastMessage}</p>
-                          {chatUser.unread > 0 && (
-                            <span className="ml-2 px-2 py-0.5 bg-indigo-600 text-white text-xs rounded-full">
-                              {chatUser.unread}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                      <button onClick={() => handleFriendAction(u.uid, "send")}
+                        className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-xl hover:bg-indigo-700 flex-shrink-0">
+                        + Add
+                      </button>
                     </div>
                   ))}
                 </div>
               </div>
+            </div>
+          )}
 
-              {/* Chat Window */}
-              <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
-                {selectedChat ? (
-                  <>
-                    {/* Chat Header */}
-                    <div className="p-4 border-b border-slate-200 flex items-center gap-3">
-                      <img
-                        src={selectedChat.avatar}
-                        alt={selectedChat.name}
-                        className="w-10 h-10 rounded-full"
-                      />
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-slate-900">{selectedChat.name}</h3>
-                        <p className="text-xs text-slate-500">
-                          {selectedChat.online ? "Active now" : "Offline"}
-                        </p>
-                      </div>
-                      <button className="w-10 h-10 hover:bg-slate-100 rounded-full flex items-center justify-center">
-                        <i className="fa-solid fa-phone text-slate-600"></i>
-                      </button>
-                      <button className="w-10 h-10 hover:bg-slate-100 rounded-full flex items-center justify-center">
-                        <i className="fa-solid fa-video text-slate-600"></i>
-                      </button>
-                    </div>
-
-                    {/* Messages */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                      {messages.map((message) => (
-                        <div
-                          key={message.id}
-                          className={`flex ${message.senderId === user.uid ? "justify-end" : "justify-start"}`}
-                        >
-                          <div
-                            className={`max-w-xs px-4 py-2 rounded-2xl ${
-                              message.senderId === user.uid
-                                ? "bg-indigo-600 text-white"
-                                : "bg-slate-100 text-slate-900"
-                            }`}
-                          >
-                            <p className="text-sm">{message.content}</p>
-                            <p className={`text-xs mt-1 ${message.senderId === user.uid ? "text-indigo-200" : "text-slate-500"}`}>
-                              {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                            </p>
+          {/* ── GROUPS ── */}
+          {activeTab === "groups" && (
+            <div className="max-w-4xl space-y-5">
+              <div className="flex items-center justify-between">
+                <h2 className="font-bold text-slate-900 text-lg">{groups.length} Group{groups.length !== 1 ? "s" : ""}</h2>
+                <button onClick={() => setShowCreateGroup(true)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 text-sm">
+                  <i className="fa-solid fa-plus"></i> Create Group
+                </button>
+              </div>
+              {groups.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {groups.map((group) => {
+                    const isMember = group.memberIds.includes(currentUser.uid);
+                    const memberProfiles = allUsers.filter((u) => group.memberIds.includes(u.uid)).slice(0, 3);
+                    return (
+                      <div key={group.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-md transition-shadow cursor-pointer" onClick={() => setViewingGroup(group)}>
+                        <div className={`h-24 bg-gradient-to-r ${group.coverColor} flex items-center justify-center`}>
+                          <p className="text-white font-bold text-lg px-4 text-center leading-tight">{group.name}</p>
+                        </div>
+                        <div className="p-4">
+                          {group.description && <p className="text-xs text-slate-500 mb-3 line-clamp-2">{group.description}</p>}
+                          <div className="flex items-center justify-between">
+                            <div className="flex -space-x-2">
+                              {memberProfiles.map((m) => (
+                                <img key={m.uid} src={m.photoURL || avatarUrl(m.displayName)} alt={m.displayName} className="w-6 h-6 rounded-full border-2 border-white object-cover" />
+                              ))}
+                            </div>
+                            <span className="text-xs text-slate-500">{group.memberIds.length} member{group.memberIds.length !== 1 ? "s" : ""}</span>
+                          </div>
+                          <div className="mt-3">
+                            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${isMember ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-600"}`}>
+                              {isMember ? "✓ Member" : "Not joined"}
+                            </span>
                           </div>
                         </div>
-                      ))}
-                    </div>
-
-                    {/* Message Input */}
-                    <div className="p-4 border-t border-slate-200">
-                      <div className="flex items-center gap-2">
-                        <button className="w-10 h-10 hover:bg-slate-100 rounded-full flex items-center justify-center">
-                          <i className="fa-solid fa-plus text-indigo-600"></i>
-                        </button>
-                        <input
-                          type="text"
-                          value={messageText}
-                          onChange={(e) => setMessageText(e.target.value)}
-                          onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
-                          placeholder="Type a message..."
-                          className="flex-1 px-4 py-2 bg-slate-100 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                        <button className="w-10 h-10 hover:bg-slate-100 rounded-full flex items-center justify-center">
-                          <i className="fa-solid fa-image text-indigo-600"></i>
-                        </button>
-                        <button
-                          onClick={handleSendMessage}
-                          disabled={!messageText.trim()}
-                          className="px-6 py-2 bg-indigo-600 text-white rounded-full text-sm font-medium hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed"
-                        >
-                          Send
-                        </button>
                       </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="bg-white rounded-2xl border border-slate-100 p-16 text-center">
+                  <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i className="fa-solid fa-users text-indigo-400 text-2xl"></i>
+                  </div>
+                  <h3 className="font-bold text-slate-900 mb-1">No groups yet</h3>
+                  <p className="text-slate-500 text-sm mb-4">Create a group to connect with others</p>
+                  <button onClick={() => setShowCreateGroup(true)} className="px-5 py-2.5 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700">Create First Group</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── CHAT ── */}
+          {activeTab === "chat" && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-0 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden" style={{ height: "calc(100vh - 280px)" }}>
+              <div className="border-r border-slate-100 flex flex-col">
+                <div className="p-4 border-b border-slate-100">
+                  <h2 className="font-bold text-slate-900 mb-3">Messages</h2>
+                  <div className="relative">
+                    <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" placeholder="Search…" className="w-full pl-9 pr-4 py-2 bg-slate-100 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto">
+                  {allUsers.filter((u) => u.uid !== currentUser.uid).map((u) => (
+                    <div key={u.uid} onClick={() => { setSelectedChat(u); loadMessages(u.uid); }}
+                      className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${selectedChat?.uid === u.uid ? "bg-indigo-50" : "hover:bg-slate-50"}`}>
+                      <div className="relative">
+                        <img src={u.photoURL || avatarUrl(u.displayName)} alt={u.displayName} className="w-10 h-10 rounded-full object-cover" />
+                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-slate-900 text-sm truncate">{u.displayName}</p>
+                        {u.title && <p className="text-xs text-slate-400 truncate">{u.title}</p>}
+                      </div>
+                      {currentUser.friends?.includes(u.uid) && <span className="w-2 h-2 bg-indigo-400 rounded-full flex-shrink-0"></span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="lg:col-span-2 flex flex-col">
+                {selectedChat ? (
+                  <>
+                    <div className="p-4 border-b border-slate-100 flex items-center gap-3">
+                      <img src={selectedChat.photoURL || avatarUrl(selectedChat.displayName)} alt="" className="w-9 h-9 rounded-full object-cover" />
+                      <div className="flex-1">
+                        <p className="font-semibold text-slate-900 text-sm">{selectedChat.displayName}</p>
+                        {selectedChat.title && <p className="text-xs text-slate-400">{selectedChat.title}</p>}
+                      </div>
+                      <button onClick={() => setViewingProfile(selectedChat)} className="px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100">View Profile</button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                      {messages.map((msg) => {
+                        const isMine = msg.senderId === currentUser.uid;
+                        return (
+                          <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                            {!isMine && <img src={selectedChat.photoURL || avatarUrl(selectedChat.displayName)} alt="" className="w-7 h-7 rounded-full mr-2 self-end flex-shrink-0 object-cover" />}
+                            <div className={`max-w-xs px-4 py-2.5 rounded-2xl text-sm ${isMine ? "bg-indigo-600 text-white rounded-br-sm" : "bg-slate-100 text-slate-900 rounded-bl-sm"}`}>
+                              <p>{msg.content}</p>
+                              <p className={`text-xs mt-1 ${isMine ? "text-indigo-200" : "text-slate-400"}`}>
+                                {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div ref={chatBottomRef} />
+                    </div>
+                    <div className="p-4 border-t border-slate-100 flex items-center gap-3">
+                      <input value={messageText} onChange={(e) => setMessageText(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
+                        placeholder="Type a message…"
+                        className="flex-1 bg-slate-100 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                      <button onClick={handleSendMessage} disabled={!messageText.trim()}
+                        className="w-10 h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center disabled:opacity-40 transition-colors flex-shrink-0">
+                        <i className="fa-solid fa-paper-plane text-sm"></i>
+                      </button>
                     </div>
                   </>
                 ) : (
                   <div className="flex-1 flex items-center justify-center">
                     <div className="text-center">
-                      <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <i className="fa-solid fa-comments text-slate-400 text-3xl"></i>
+                      <div className="w-16 h-16 bg-indigo-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <i className="fa-solid fa-comments text-indigo-400 text-2xl"></i>
                       </div>
-                      <h3 className="text-xl font-bold text-slate-900 mb-2">Your Messages</h3>
-                      <p className="text-slate-600">Select a conversation to start chatting</p>
+                      <p className="font-bold text-slate-900 mb-1">Your Messages</p>
+                      <p className="text-slate-500 text-sm">Select a person to start chatting</p>
                     </div>
                   </div>
                 )}
               </div>
             </div>
           )}
-
-          {/* Groups Tab */}
-          {activeTab === "groups" && (
-            <div className="max-w-4xl mx-auto">
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-xl font-bold text-slate-900">Your Groups</h2>
-                  <button className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700">
-                    + Create Group
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer">
-                    <div className="w-full h-32 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg mb-3"></div>
-                    <h3 className="font-bold text-slate-900">Frontend Developers</h3>
-                    <p className="text-sm text-slate-600 mb-2">15.2K members</p>
-                    <p className="text-xs text-slate-500">Last activity: 2 hours ago</p>
-                  </div>
-                  <div className="border border-slate-200 rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer">
-                    <div className="w-full h-32 bg-gradient-to-br from-green-500 to-teal-600 rounded-lg mb-3"></div>
-                    <h3 className="font-bold text-slate-900">Data Science Hub</h3>
-                    <p className="text-sm text-slate-600 mb-2">8.7K members</p>
-                    <p className="text-xs text-slate-500">Last activity: 1 hour ago</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Events Tab */}
-          {activeTab === "events" && (
-            <div className="max-w-4xl mx-auto">
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
-                <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <i className="fa-solid fa-calendar text-indigo-600 text-3xl"></i>
-                </div>
-                <h3 className="text-xl font-bold text-slate-900 mb-2">Events Coming Soon</h3>
-                <p className="text-slate-600">Discover and join tech events near you</p>
-              </div>
-            </div>
-          )}
         </div>
       </section>
+
+      {showCreatePost && <CreatePostModal user={currentUser} onClose={() => setShowCreatePost(false)} onPost={handleCreatePost} />}
+      {showCreateGroup && <CreateGroupModal currentUser={currentUser} allUsers={allUsers} onClose={() => setShowCreateGroup(false)} onCreate={handleCreateGroup} />}
+      {viewingProfile && (
+        <ProfileModal profile={viewingProfile} currentUserId={currentUser.uid} currentUserFriends={currentUser.friends || []}
+          onClose={() => setViewingProfile(null)} onFriendAction={handleFriendAction} onMessage={openChat} />
+      )}
+      {viewingGroup && (
+        <GroupDetailModal group={viewingGroup} allUsers={allUsers} currentUserId={currentUser.uid}
+          onClose={() => setViewingGroup(null)} onAddMember={handleAddMember} onLeave={handleLeaveGroup} />
+      )}
     </main>
   );
 }
