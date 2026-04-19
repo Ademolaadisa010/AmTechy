@@ -141,50 +141,67 @@ export default function TutorSettings() {
     return () => unsubscribe();
   }, [router]);
 
-  const fetchSettings = async (userId: string) => {
-    try {
-      // Fetch tutor profile
-      const profileDoc = await getDoc(doc(db, "tutor_profiles", userId));
-      if (profileDoc.exists()) {
-        const data = profileDoc.data();
-        setProfile({
-          displayName: data.displayName || "",
-          email: data.email || "",
-          phone: data.phone || "",
-          bio: data.bio || "",
-          tagline: data.tagline || "",
-          expertise: data.expertise || [],
-          experience: data.experience || "",
-          education: data.education || "",
-          languages: data.languages || ["English"],
-          timezone: data.timezone || "America/New_York",
-          profilePhoto: data.profilePhoto,
-        });
+  // Replace your fetchSettings function with this:
 
-        if (data.pricing) {
-          setPricing({
-            hourlyRate: data.pricing.hourlyRate || 50,
-            groupRate: data.pricing.groupRate || 35,
-            packageRates: {
-              hours5: data.pricing.packageRates?.hours5 || 225,
-              hours10: data.pricing.packageRates?.hours10 || 450,
-              hours20: data.pricing.packageRates?.hours20 || 850,
-            },
+    const fetchSettings = async (userId: string) => {
+      try {
+        const profileDoc = await getDoc(doc(db, "tutor_profiles", userId));
+        if (profileDoc.exists()) {
+          const data = profileDoc.data();
+
+          setProfile({
+            displayName: data.displayName || "",
+            email: data.email || "",
+            phone: data.phone || "",
+            bio: data.bio || "",
+            tagline: data.tagline || "",
+            expertise: Array.isArray(data.expertise) ? data.expertise : [],
+            experience: data.experience || "",
+            education: data.education || "",
+            languages: Array.isArray(data.languages) && data.languages.length > 0
+              ? data.languages
+              : ["English"],
+            timezone: data.timezone || "America/New_York",
+            profilePhoto: data.profilePhoto,
           });
-        }
-      }
 
-      // Set email from Firebase Auth
-      if (auth.currentUser) {
-        setProfile((prev) => ({
-          ...prev,
-          email: auth.currentUser?.email || "",
-        }));
+          // ✅ Safe number parsing — never lets NaN into state
+          const safeNum = (val: any, fallback: number) => {
+            const n = Number(val);
+            return isNaN(n) ? fallback : n;
+          };
+
+          if (data.pricing) {
+            setPricing({
+              hourlyRate:  safeNum(data.pricing.hourlyRate, 50),
+              groupRate:   safeNum(data.pricing.groupRate, 35),
+              packageRates: {
+                hours5:  safeNum(data.pricing.packageRates?.hours5,  225),
+                hours10: safeNum(data.pricing.packageRates?.hours10, 450),
+                hours20: safeNum(data.pricing.packageRates?.hours20, 850),
+              },
+            });
+          }
+
+          if (data.notificationSettings) {
+            setNotifications(data.notificationSettings);
+          }
+
+          if (data.privacySettings) {
+            setPrivacySettings(data.privacySettings);
+          }
+        }
+
+        if (auth.currentUser) {
+          setProfile((prev) => ({
+            ...prev,
+            email: auth.currentUser?.email || prev.email,
+          }));
+        }
+      } catch (error) {
+        console.error("Error fetching settings:", error);
       }
-    } catch (error) {
-      console.error("Error fetching settings:", error);
-    }
-  };
+    };
 
   const handleSaveProfile = async () => {
     if (!user) return;
@@ -691,11 +708,10 @@ export default function TutorSettings() {
             )}
 
             {/* Pricing Settings */}
+            {/* Pricing Settings */}
             {activeTab === "pricing" && (
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                <h2 className="text-xl font-bold text-slate-900 mb-6">
-                  Pricing Settings
-                </h2>
+                <h2 className="text-xl font-bold text-slate-900 mb-6">Pricing Settings</h2>
 
                 <div className="space-y-6">
                   {/* Hourly Rate */}
@@ -704,26 +720,22 @@ export default function TutorSettings() {
                       Hourly Rate (1-on-1 Sessions)
                     </label>
                     <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-semibold">
-                        $
-                      </span>
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-semibold">$</span>
                       <input
                         type="number"
                         min="10"
                         step="5"
-                        value={pricing.hourlyRate}
+                        value={isNaN(pricing.hourlyRate) ? "" : pricing.hourlyRate}
                         onChange={(e) =>
                           setPricing({
                             ...pricing,
-                            hourlyRate: parseFloat(e.target.value),
+                            hourlyRate: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
                           })
                         }
                         className="w-full pl-8 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent"
                       />
                     </div>
-                    <p className="text-sm text-slate-500 mt-1">
-                      Standard rate for individual tutoring sessions
-                    </p>
+                    <p className="text-sm text-slate-500 mt-1">Standard rate for individual tutoring sessions</p>
                   </div>
 
                   {/* Group Rate */}
@@ -732,55 +744,48 @@ export default function TutorSettings() {
                       Group Session Rate (per person)
                     </label>
                     <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-semibold">
-                        $
-                      </span>
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-semibold">$</span>
                       <input
                         type="number"
                         min="10"
                         step="5"
-                        value={pricing.groupRate}
+                        value={isNaN(pricing.groupRate) ? "" : pricing.groupRate}
                         onChange={(e) =>
                           setPricing({
                             ...pricing,
-                            groupRate: parseFloat(e.target.value),
+                            groupRate: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
                           })
                         }
                         className="w-full pl-8 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-600 focus:border-transparent"
                       />
                     </div>
-                    <p className="text-sm text-slate-500 mt-1">
-                      Rate per student for group sessions (2+ students)
-                    </p>
+                    <p className="text-sm text-slate-500 mt-1">Rate per student for group sessions (2+ students)</p>
                   </div>
 
                   {/* Package Pricing */}
                   <div className="border-t border-slate-200 pt-6">
-                    <h3 className="font-semibold text-slate-900 mb-4">
-                      Package Pricing
-                    </h3>
+                    <h3 className="font-semibold text-slate-900 mb-4">Package Pricing</h3>
 
                     <div className="space-y-4">
+                      {/* 5 Hours */}
                       <div className="flex items-center gap-4">
                         <div className="flex-1">
                           <label className="block text-sm font-medium text-slate-700 mb-2">
                             5 Hours Package
                           </label>
                           <div className="relative">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-semibold">
-                              $
-                            </span>
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-semibold">$</span>
                             <input
                               type="number"
                               min="50"
                               step="25"
-                              value={pricing.packageRates.hours5}
+                              value={isNaN(pricing.packageRates.hours5) ? "" : pricing.packageRates.hours5}
                               onChange={(e) =>
                                 setPricing({
                                   ...pricing,
                                   packageRates: {
                                     ...pricing.packageRates,
-                                    hours5: parseFloat(e.target.value),
+                                    hours5: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
                                   },
                                 })
                               }
@@ -789,30 +794,31 @@ export default function TutorSettings() {
                           </div>
                         </div>
                         <div className="text-sm text-slate-600 pt-6">
-                          Save {((1 - pricing.packageRates.hours5 / (pricing.hourlyRate * 5)) * 100).toFixed(0)}%
+                          {pricing.hourlyRate > 0
+                            ? `Save ${Math.max(0, ((1 - pricing.packageRates.hours5 / (pricing.hourlyRate * 5)) * 100)).toFixed(0)}%`
+                            : "—"}
                         </div>
                       </div>
 
+                      {/* 10 Hours */}
                       <div className="flex items-center gap-4">
                         <div className="flex-1">
                           <label className="block text-sm font-medium text-slate-700 mb-2">
                             10 Hours Package
                           </label>
                           <div className="relative">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-semibold">
-                              $
-                            </span>
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-semibold">$</span>
                             <input
                               type="number"
                               min="100"
                               step="50"
-                              value={pricing.packageRates.hours10}
+                              value={isNaN(pricing.packageRates.hours10) ? "" : pricing.packageRates.hours10}
                               onChange={(e) =>
                                 setPricing({
                                   ...pricing,
                                   packageRates: {
                                     ...pricing.packageRates,
-                                    hours10: parseFloat(e.target.value),
+                                    hours10: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
                                   },
                                 })
                               }
@@ -821,30 +827,31 @@ export default function TutorSettings() {
                           </div>
                         </div>
                         <div className="text-sm text-slate-600 pt-6">
-                          Save {((1 - pricing.packageRates.hours10 / (pricing.hourlyRate * 10)) * 100).toFixed(0)}%
+                          {pricing.hourlyRate > 0
+                            ? `Save ${Math.max(0, ((1 - pricing.packageRates.hours10 / (pricing.hourlyRate * 10)) * 100)).toFixed(0)}%`
+                            : "—"}
                         </div>
                       </div>
 
+                      {/* 20 Hours */}
                       <div className="flex items-center gap-4">
                         <div className="flex-1">
                           <label className="block text-sm font-medium text-slate-700 mb-2">
                             20 Hours Package
                           </label>
                           <div className="relative">
-                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-semibold">
-                              $
-                            </span>
+                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 font-semibold">$</span>
                             <input
                               type="number"
                               min="200"
                               step="100"
-                              value={pricing.packageRates.hours20}
+                              value={isNaN(pricing.packageRates.hours20) ? "" : pricing.packageRates.hours20}
                               onChange={(e) =>
                                 setPricing({
                                   ...pricing,
                                   packageRates: {
                                     ...pricing.packageRates,
-                                    hours20: parseFloat(e.target.value),
+                                    hours20: e.target.value === "" ? 0 : parseFloat(e.target.value) || 0,
                                   },
                                 })
                               }
@@ -853,7 +860,9 @@ export default function TutorSettings() {
                           </div>
                         </div>
                         <div className="text-sm text-slate-600 pt-6">
-                          Save {((1 - pricing.packageRates.hours20 / (pricing.hourlyRate * 20)) * 100).toFixed(0)}%
+                          {pricing.hourlyRate > 0
+                            ? `Save ${Math.max(0, ((1 - pricing.packageRates.hours20 / (pricing.hourlyRate * 20)) * 100)).toFixed(0)}%`
+                            : "—"}
                         </div>
                       </div>
                     </div>
@@ -862,8 +871,7 @@ export default function TutorSettings() {
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <p className="text-sm text-blue-900">
                       <i className="fa-solid fa-lightbulb mr-2"></i>
-                      Tip: Offer package discounts to encourage students to book
-                      multiple sessions upfront.
+                      Tip: Offer package discounts to encourage students to book multiple sessions upfront.
                     </p>
                   </div>
 
@@ -873,15 +881,9 @@ export default function TutorSettings() {
                     className="w-full px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {saving ? (
-                      <>
-                        <i className="fa-solid fa-spinner fa-spin mr-2"></i>
-                        Saving...
-                      </>
+                      <><i className="fa-solid fa-spinner fa-spin mr-2"></i>Saving...</>
                     ) : (
-                      <>
-                        <i className="fa-solid fa-save mr-2"></i>
-                        Save Pricing
-                      </>
+                      <><i className="fa-solid fa-save mr-2"></i>Save Pricing</>
                     )}
                   </button>
                 </div>

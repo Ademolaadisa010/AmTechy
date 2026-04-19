@@ -259,22 +259,36 @@ export default function FindTutor() {
 
   const fetchTutors = async () => {
     try {
-      const snapshot = await getDocs(query(collection(db, "tutors")));
-      const tutorsData: Tutor[] = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        name: doc.data().name || "",
-        title: doc.data().title || "",
-        company: doc.data().company || "",
-        bio: doc.data().bio || "",
-        skills: doc.data().skills || [],
-        rating: doc.data().rating || 4.5,
-        reviewCount: doc.data().reviewCount || 0,
-        hourlyRate: doc.data().hourlyRate || 40,
-        profileImage: doc.data().profileImage,
-        expertise: doc.data().expertise || [],
-        availability: doc.data().availability || "Available",
-        verified: doc.data().verified || false,
-      }));
+      // FIXED: Fetch from tutor_profiles (where approved tutors are saved) instead of tutors
+      const snapshot = await getDocs(query(collection(db, "tutor_profiles")));
+      const tutorsData: Tutor[] = snapshot.docs
+        .filter((doc) => {
+          const data = doc.data();
+          // Only show active, verified tutors
+          return data.isActive === true || data.isActive !== false;
+        })
+        .map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            // Map display names
+            name: data.displayName || data.name || "Unknown Tutor",
+            title: data.jobTitle || data.title || "Mentor",
+            company: data.company || "",
+            bio: data.bio || "",
+            // Map skills/expertise arrays
+            skills: data.expertise || data.skills || data.primarySkills || [],
+            rating: data.rating || 5.0,
+            reviewCount: data.totalReviews || data.reviewCount || 0,
+            hourlyRate: data.hourlyRate || 50,
+            profileImage: data.profileImage,
+            expertise: data.expertise || [],
+            availability: data.availability || "Available",
+            verified: data.isVerified || data.verified || true,
+          };
+        });
+      
+      console.log('Fetched tutors from tutor_profiles:', tutorsData);
       setTutors(tutorsData);
       setFilteredTutors(tutorsData);
     } catch (error) {

@@ -39,6 +39,7 @@ interface Tutor {
 
 type Step = "schedule" | "payment" | "confirm";
 
+// ── Step indicator ────────────────────────────────────────────────────────────
 function StepIndicator({ current }: { current: Step }) {
   const steps: { id: Step; label: string }[] = [
     { id: "schedule", label: "Schedule" },
@@ -79,128 +80,150 @@ function StepIndicator({ current }: { current: Step }) {
   );
 }
 
-function PaymentModal({ tutor, amount, onSuccess, onClose }: {
-  tutor: Tutor; amount: number; onSuccess: () => void; onClose: () => void;
+// ── Payment Modal — Bank Transfer ONLY ───────────────────────────────────────
+function PaymentModal({
+  amount,
+  tutorName,
+  onConfirm,
+  onClose,
+}: {
+  amount: number;
+  tutorName: string;
+  onConfirm: () => void;
+  onClose: () => void;
 }) {
-  const [payMethod, setPayMethod] = useState<"card" | "transfer">("card");
-  const [cardNumber, setCardNumber] = useState("");
-  const [expiry, setExpiry] = useState("");
-  const [cvv, setCvv] = useState("");
-  const [cardName, setCardName] = useState("");
-  const [processing, setProcessing] = useState(false);
-  const [error, setError] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const formatCard = (val: string) => val.replace(/\D/g, "").slice(0, 16).replace(/(\d{4})(?=\d)/g, "$1 ");
-  const formatExpiry = (val: string) => {
-    const d = val.replace(/\D/g, "").slice(0, 4);
-    return d.length >= 2 ? d.slice(0, 2) + "/" + d.slice(2) : d;
-  };
-
-  const handlePay = async () => {
-    setError("");
-    if (payMethod === "card" && (!cardNumber || !expiry || !cvv || !cardName)) {
-      setError("Please fill in all card details.");
-      return;
-    }
-    setProcessing(true);
-    await new Promise((r) => setTimeout(r, 2200)); // Replace with Paystack SDK
-    setProcessing(false);
-    onSuccess();
+  const handleConfirm = async () => {
+    if (!confirmed) return;
+    setSubmitting(true);
+    await new Promise((r) => setTimeout(r, 800));
+    onConfirm();
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="bg-gradient-to-r from-indigo-600 to-violet-600 px-6 py-5 flex items-center justify-between">
-          <div>
-            <p className="text-indigo-200 text-xs uppercase tracking-widest font-semibold">Secure Payment</p>
-            <p className="text-white text-2xl font-bold mt-0.5">{toNaira(amount)}</p>
+        {/* Header */}
+        <div className="bg-gradient-to-r from-indigo-700 to-indigo-500 px-6 py-5">
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-indigo-200 text-xs uppercase tracking-widest font-semibold">
+              Bank Transfer Required
+            </p>
+            <span className="flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1 text-white text-xs font-semibold">
+              <i className="fa-solid fa-lock text-xs" />
+              Escrow Protected
+            </span>
           </div>
-          <div className="flex items-center gap-1.5 bg-white/20 rounded-full px-3 py-1.5">
-            <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-            </svg>
-            <span className="text-white text-xs font-semibold">SSL Secured</span>
-          </div>
+          <p className="text-white text-3xl font-bold">{toNaira(amount)}</p>
+          <p className="text-indigo-200 text-sm mt-0.5">Session with {tutorName}</p>
         </div>
+
         <div className="p-6 space-y-5">
-          <div className="flex gap-2 bg-slate-100 p-1 rounded-xl">
-            {(["card", "transfer"] as const).map((m) => (
-              <button key={m} onClick={() => setPayMethod(m)}
-                className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${payMethod === m ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
-                {m === "card" ? "💳  Debit/Credit Card" : "🏦  Bank Transfer"}
-              </button>
+          {/* How it works */}
+          <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 space-y-3">
+            <p className="text-sm font-bold text-indigo-900 flex items-center gap-2">
+              <i className="fa-solid fa-circle-info text-indigo-500" />
+              How payment works
+            </p>
+            <div className="space-y-2.5">
+              {[
+                "Transfer the session fee to our company account below",
+                "Your booking is confirmed once transfer is verified (within 1 hour)",
+                "After your session is completed, we release payment to your tutor",
+              ].map((text, i) => (
+                <div key={i} className="flex items-start gap-3">
+                  <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
+                    {i + 1}
+                  </span>
+                  <p className="text-sm text-indigo-800 leading-snug">{text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Bank details */}
+          <div className="border-2 border-dashed border-slate-200 rounded-xl p-5 space-y-3">
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+              <i className="fa-solid fa-building-columns text-slate-400" />
+              Transfer Details
+            </p>
+            {[
+              { label: "Bank Name", value: "Guaranty Trust Bank (GTB)" },
+              { label: "Account Number", value: "0123456789", mono: true },
+              { label: "Account Name", value: "AmTechy Technology Ltd" },
+              { label: "Amount", value: toNaira(amount), highlight: true },
+            ].map((row) => (
+              <div key={row.label} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
+                <span className="text-sm text-slate-500">{row.label}</span>
+                <span className={`text-sm font-bold ${
+                  row.highlight ? "text-indigo-600 text-base" : "text-slate-900"
+                } ${row.mono ? "font-mono tracking-widest" : ""}`}>
+                  {row.value}
+                </span>
+              </div>
             ))}
           </div>
 
-          {payMethod === "card" ? (
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Card Number</label>
-                <input type="text" inputMode="numeric" value={cardNumber} onChange={(e) => setCardNumber(formatCard(e.target.value))}
-                  placeholder="0000 0000 0000 0000"
-                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono tracking-widest" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Name on Card</label>
-                <input type="text" value={cardName} onChange={(e) => setCardName(e.target.value)} placeholder="JOHN DOE"
-                  className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 uppercase" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">Expiry</label>
-                  <input type="text" inputMode="numeric" value={expiry} onChange={(e) => setExpiry(formatExpiry(e.target.value))} placeholder="MM/YY"
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1.5">CVV</label>
-                  <input type="password" inputMode="numeric" maxLength={4} value={cvv}
-                    onChange={(e) => setCvv(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="•••"
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-slate-50 rounded-xl p-4 space-y-2 text-sm">
-              <p className="font-semibold text-slate-800">Transfer exactly {toNaira(amount)} to:</p>
-              <div className="space-y-1 text-slate-700">
-                <p><span className="text-slate-500">Bank:</span> <strong>Guaranty Trust Bank</strong></p>
-                <p><span className="text-slate-500">Account No:</span> <strong className="font-mono tracking-wider">0123456789</strong></p>
-                <p><span className="text-slate-500">Account Name:</span> <strong>SkillPath Escrow Ltd</strong></p>
-              </div>
-              <p className="text-xs text-orange-600 bg-orange-50 rounded-lg px-3 py-2 mt-2">
-                ⚠️ Use your name as the transfer narration. Funds are held in escrow until the session is complete.
-              </p>
-            </div>
-          )}
+          {/* Narration tip */}
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
+            <i className="fa-solid fa-triangle-exclamation text-amber-500 mt-0.5 flex-shrink-0" />
+            <p className="text-sm text-amber-900">
+              <span className="font-bold">Important:</span> Use your full name as the transfer narration so we can match your payment quickly.
+            </p>
+          </div>
 
-          {error && <p className="text-red-600 text-xs bg-red-50 px-4 py-2.5 rounded-lg">{error}</p>}
+          {/* Confirmation checkbox */}
+          <label className="flex items-start gap-3 cursor-pointer select-none">
+            <div
+              onClick={() => setConfirmed(!confirmed)}
+              className={`w-5 h-5 rounded border-2 flex-shrink-0 mt-0.5 flex items-center justify-center transition-all cursor-pointer ${
+                confirmed ? "bg-indigo-600 border-indigo-600" : "border-slate-300 hover:border-indigo-400"
+              }`}
+            >
+              {confirmed && (
+                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                </svg>
+              )}
+            </div>
+            <span className="text-sm text-slate-700 leading-snug">
+              I confirm I have transferred <strong>{toNaira(amount)}</strong> to the AmTechy account above and understand my booking will be confirmed after payment verification.
+            </span>
+          </label>
 
-          <div className="flex gap-3 pt-1">
-            <button onClick={onClose} disabled={processing}
-              className="flex-1 py-3 border border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50">
+          {/* Actions */}
+          <div className="flex gap-3">
+            <button onClick={onClose} disabled={submitting}
+              className="flex-1 py-3 border border-slate-200 text-slate-700 font-semibold rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50 text-sm">
               Cancel
             </button>
-            <button onClick={handlePay} disabled={processing}
-              className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-70 flex items-center justify-center gap-2">
-              {processing ? (
-                <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>Processing…</>
-              ) : <>Pay {toNaira(amount)}</>}
+            <button onClick={handleConfirm} disabled={!confirmed || submitting}
+              className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm">
+              {submitting
+                ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />Submitting…</>
+                : <><i className="fa-solid fa-circle-check" />I've Transferred</>}
             </button>
           </div>
-          <p className="text-center text-xs text-slate-400">Powered by Paystack · Your payment is secured with 256-bit encryption</p>
+
+          <p className="text-center text-xs text-slate-400">
+            Payments verified within 1 hour on business days · Tutors paid after session completion
+          </p>
         </div>
       </div>
     </div>
   );
 }
 
-export default function BookTutor() {
+// ── Main component ────────────────────────────────────────────────────────────
+export default function BookTutorClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [tutorId, setTutorId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [tutor, setTutor] = useState<Tutor | null>(null);
+  const [notFound, setNotFound] = useState(false);
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
   const [sessionType, setSessionType] = useState("1-hour");
@@ -245,54 +268,56 @@ export default function BookTutor() {
   const availableDates = getAvailableDates();
   const timeSlots = getTimeSlots();
 
-  useEffect(() => { setTutorId(searchParams.get("tutorId")); }, [searchParams]);
+  useEffect(() => {
+    const id = searchParams.get("tutorId");
+    setTutorId(id);
+  }, [searchParams]);
 
   useEffect(() => {
+    if (tutorId === null) return;
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setUserId(user.uid);
-        if (tutorId) { await fetchTutor(); setLoading(false); }
-        else if (tutorId === null) return;
-        else { router.push("/find-tutor"); setLoading(false); }
-      } else { router.push("/login"); }
+      if (!user) { router.push("/login"); return; }
+      setUserId(user.uid);
+      if (!tutorId) { router.push("/find-tutor"); return; }
+      await fetchTutor(tutorId);
+      setLoading(false);
     });
     return () => unsubscribe();
   }, [tutorId, router]);
 
-  const fetchTutor = async () => {
-    if (!tutorId) return;
+  const fetchTutor = async (id: string) => {
     try {
-      const tutorDoc = await getDoc(doc(db, "tutors", tutorId));
-      if (tutorDoc.exists()) {
-        setTutor({
-          id: tutorDoc.id,
-          name: tutorDoc.data().name || "",
-          title: tutorDoc.data().title || "",
-          company: tutorDoc.data().company || "",
-          bio: tutorDoc.data().bio || "",
-          skills: tutorDoc.data().skills || [],
-          rating: tutorDoc.data().rating || 4.5,
-          reviewCount: tutorDoc.data().reviewCount || 0,
-          hourlyRate: tutorDoc.data().hourlyRate || 40,
-          profileImage: tutorDoc.data().profileImage,
-          availability: tutorDoc.data().availability || "Available",
-          verified: tutorDoc.data().verified || false,
-        });
-      } else { router.push("/find-tutor"); }
-    } catch { router.push("/find-tutor"); }
+      let snap = await getDoc(doc(db, "tutor_profiles", id));
+      if (!snap.exists()) snap = await getDoc(doc(db, "tutors", id));
+      if (!snap.exists()) { setNotFound(true); return; }
+      const d = snap.data();
+      setTutor({
+        id: snap.id,
+        name: d.displayName || d.name || "Unknown Tutor",
+        title: d.jobTitle || d.title || "Mentor",
+        company: d.company || "",
+        bio: d.bio || "",
+        skills: Array.isArray(d.expertise) ? d.expertise : Array.isArray(d.skills) ? d.skills : [],
+        rating: typeof d.rating === "number" ? d.rating : 5.0,
+        reviewCount: d.totalReviews ?? d.reviewCount ?? 0,
+        hourlyRate: typeof d.hourlyRate === "number" ? d.hourlyRate : 50,
+        profileImage: d.profileImage || d.avatar || undefined,
+        availability: d.availability || "Available",
+        verified: d.isVerified ?? d.verified ?? true,
+      });
+    } catch (err) {
+      console.error("Error fetching tutor:", err);
+      setNotFound(true);
+    }
   };
 
   const calculateTotal = () => {
     if (!tutor) return 0;
-    return tutor.hourlyRate * (sessionTypes.find((s) => s.id === sessionType)?.price || 1);
+    return tutor.hourlyRate * (sessionTypes.find((s) => s.id === sessionType)?.price ?? 1);
   };
 
-  const handleProceedToPayment = () => {
-    if (!selectedDate || !selectedTime) return;
-    setShowPayment(true);
-  };
-
-  const handlePaymentSuccess = async () => {
+  // Called after user ticks "I've transferred" in the modal
+  const handlePaymentConfirmed = async () => {
     setShowPayment(false);
     setStep("payment");
     setSubmitting(true);
@@ -301,68 +326,125 @@ export default function BookTutor() {
         userId,
         tutorId: tutor!.id,
         tutorName: tutor!.name,
+        studentId: userId,
         date: selectedDate,
         time: selectedTime,
         sessionType,
         notes,
+        amount: calculateTotal(),
         totalAmountNGN: calculateTotal() * USD_TO_NGN,
         totalAmountUSD: calculateTotal(),
-        paymentStatus: "paid",
+        paymentMethod: "bank_transfer",
+        // Admin must verify the transfer before marking as confirmed
+        paymentStatus: "pending_verification",
         status: "pending",
         createdAt: serverTimestamp(),
       });
       setStep("confirm");
-    } catch { alert("Booking failed after payment. Please contact support."); }
-    finally { setSubmitting(false); }
+    } catch (err) {
+      console.error("Booking error:", err);
+      alert("Failed to save booking. Please contact support.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
+  // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <main className="flex-1 flex bg-slate-50 min-h-screen items-center justify-center">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="text-slate-600">Loading booking details…</p>
         </div>
       </main>
     );
   }
 
-  if (!tutor) return null;
+  // ── Not found ─────────────────────────────────────────────────────────────
+  if (notFound || !tutor) {
+    return (
+      <main className="flex-1 flex bg-slate-50 min-h-screen items-center justify-center p-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 max-w-sm w-full p-8 text-center">
+          <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i className="fa-solid fa-user-slash text-red-400 text-2xl" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 mb-2">Tutor Not Found</h2>
+          <p className="text-slate-500 text-sm mb-6">
+            This tutor profile could not be found. They may have been removed or the link is invalid.
+          </p>
+          <button onClick={() => router.push("/find-tutor")}
+            className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors">
+            Browse Tutors
+          </button>
+        </div>
+      </main>
+    );
+  }
 
+  // ── Confirmation screen ───────────────────────────────────────────────────
   if (step === "confirm") {
     return (
       <main className="flex-1 bg-slate-50 min-h-screen flex items-center justify-center p-6">
         <div className="bg-white rounded-2xl shadow-xl border border-slate-100 max-w-md w-full p-8 text-center">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-5">
-            <svg className="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-            </svg>
+          <div className="w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-5">
+            <i className="fa-solid fa-clock text-indigo-600 text-3xl" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">Booking Confirmed!</h1>
-          <p className="text-slate-500 mb-6 text-sm">
-            Payment received. Your session with <span className="font-semibold text-slate-800">{tutor.name}</span> is confirmed.
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Booking Submitted!</h1>
+          <p className="text-slate-500 mb-6 text-sm leading-relaxed">
+            Your booking with <span className="font-semibold text-slate-800">{tutor.name}</span> has been submitted.
+            We'll verify your bank transfer and confirm your session within <strong>1 hour</strong>.
           </p>
-          <div className="bg-slate-50 rounded-xl p-4 text-sm text-left space-y-2 mb-6">
+
+          {/* What happens next */}
+          <div className="bg-slate-50 rounded-xl p-4 text-sm text-left space-y-3 mb-5">
+            <p className="font-bold text-slate-700 text-xs uppercase tracking-wider">What happens next</p>
+            {[
+              { icon: "fa-magnifying-glass", color: "text-indigo-500", text: "We verify your bank transfer" },
+              { icon: "fa-envelope", color: "text-blue-500", text: "You get a confirmation email with session details" },
+              { icon: "fa-video", color: "text-green-500", text: "Session link sent 30 mins before your scheduled time" },
+              { icon: "fa-money-bill-transfer", color: "text-emerald-600", text: "After the session, we release payment to your tutor" },
+            ].map((item, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <i className={`fa-solid ${item.icon} ${item.color} w-4 text-center flex-shrink-0`} />
+                <span className="text-slate-700">{item.text}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Summary */}
+          <div className="border border-slate-200 rounded-xl p-4 text-sm text-left space-y-2 mb-5">
             <div className="flex justify-between">
               <span className="text-slate-500">Date</span>
               <span className="font-semibold text-slate-800">
-                {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-NG", { weekday: "long", month: "long", day: "numeric" })}
+                {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-NG", {
+                  weekday: "long", month: "long", day: "numeric",
+                })}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Time</span>
-              <span className="font-semibold text-slate-800">{timeSlots.find((s) => s.value === selectedTime)?.label}</span>
+              <span className="font-semibold text-slate-800">
+                {timeSlots.find((s) => s.value === selectedTime)?.label}
+              </span>
             </div>
             <div className="flex justify-between">
               <span className="text-slate-500">Duration</span>
-              <span className="font-semibold text-slate-800">{sessionTypes.find((s) => s.id === sessionType)?.label}</span>
+              <span className="font-semibold text-slate-800">
+                {sessionTypes.find((s) => s.id === sessionType)?.label}
+              </span>
             </div>
-            <div className="flex justify-between border-t border-slate-200 pt-2 mt-1">
-              <span className="text-slate-500">Amount Paid</span>
+            <div className="flex justify-between border-t border-slate-200 pt-2">
+              <span className="text-slate-500">Amount Declared</span>
               <span className="font-bold text-indigo-600">{toNaira(calculateTotal())}</span>
             </div>
           </div>
-          <p className="text-xs text-slate-400 mb-6">A session link will be sent to your email 30 minutes before the scheduled time.</p>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800 mb-6 text-left">
+            <i className="fa-solid fa-triangle-exclamation mr-1.5 text-amber-500" />
+            If your payment is not verified within 2 hours, your booking may be cancelled. Contact support if you need help.
+          </div>
+
           <button onClick={() => router.push("/dashboard")}
             className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors">
             Go to Dashboard
@@ -372,10 +454,12 @@ export default function BookTutor() {
     );
   }
 
+  // ── Schedule screen ───────────────────────────────────────────────────────
   return (
     <main className="flex-1 bg-slate-50 min-h-screen">
       <div className="max-w-5xl mx-auto p-6">
-        <button onClick={() => router.back()} className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-6 transition-colors">
+        <button onClick={() => router.back()}
+          className="flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-6 transition-colors">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
@@ -385,6 +469,7 @@ export default function BookTutor() {
         <StepIndicator current={step} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left: booking form */}
           <div className="lg:col-span-2">
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-8">
               <div className="flex items-center gap-3 mb-6 pb-6 border-b border-slate-200">
@@ -395,95 +480,122 @@ export default function BookTutor() {
                 </div>
                 <div>
                   <h1 className="text-2xl font-bold text-slate-900">Book a Session</h1>
-                  <p className="text-sm text-slate-600">Choose your preferred date and time</p>
+                  <p className="text-sm text-slate-600">with {tutor.name}</p>
                 </div>
               </div>
 
               <div className="space-y-6">
+                {/* Session duration */}
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-3">Session Duration</label>
                   <div className="grid grid-cols-3 gap-3">
                     {sessionTypes.map((type) => (
                       <button key={type.id} onClick={() => setSessionType(type.id)}
-                        className={`p-4 rounded-xl border-2 text-center transition-all ${sessionType === type.id ? "border-indigo-600 bg-indigo-50 shadow-sm" : "border-slate-200 hover:border-slate-300"}`}>
+                        className={`p-4 rounded-xl border-2 text-center transition-all ${
+                          sessionType === type.id
+                            ? "border-indigo-600 bg-indigo-50 shadow-sm"
+                            : "border-slate-200 hover:border-slate-300"
+                        }`}>
                         <div className="font-bold text-slate-900">{type.label}</div>
-                        <div className="text-sm text-indigo-600 font-semibold mt-1">{toNaira(tutor.hourlyRate * type.price)}</div>
+                        <div className="text-sm text-indigo-600 font-semibold mt-1">
+                          {toNaira(tutor.hourlyRate * type.price)}
+                        </div>
                       </button>
                     ))}
                   </div>
                 </div>
 
+                {/* Date */}
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-3">Select Date</label>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                     {availableDates.map((date) => (
                       <button key={date.value} onClick={() => setSelectedDate(date.value)}
-                        className={`p-3 rounded-xl border-2 text-center text-sm transition-all ${selectedDate === date.value ? "border-indigo-600 bg-indigo-50 font-semibold shadow-sm" : "border-slate-200 hover:border-slate-300"}`}>
+                        className={`p-3 rounded-xl border-2 text-center text-sm transition-all ${
+                          selectedDate === date.value
+                            ? "border-indigo-600 bg-indigo-50 font-semibold shadow-sm"
+                            : "border-slate-200 hover:border-slate-300"
+                        }`}>
                         {date.label}
                       </button>
                     ))}
                   </div>
                 </div>
 
+                {/* Time */}
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-3">Select Time</label>
                   <div className="grid grid-cols-3 md:grid-cols-4 gap-2 max-h-64 overflow-y-auto p-1 rounded-lg">
                     {timeSlots.map((slot) => (
                       <button key={slot.value} onClick={() => setSelectedTime(slot.value)}
-                        className={`p-3 rounded-xl border-2 text-center text-sm transition-all ${selectedTime === slot.value ? "border-indigo-600 bg-indigo-50 font-semibold shadow-sm" : "border-slate-200 hover:border-slate-300"}`}>
+                        className={`p-3 rounded-xl border-2 text-center text-sm transition-all ${
+                          selectedTime === slot.value
+                            ? "border-indigo-600 bg-indigo-50 font-semibold shadow-sm"
+                            : "border-slate-200 hover:border-slate-300"
+                        }`}>
                         {slot.label}
                       </button>
                     ))}
                   </div>
                 </div>
 
+                {/* Notes */}
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-3">
                     Session Notes <span className="text-slate-400 font-normal">(Optional)</span>
                   </label>
                   <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
                     placeholder="What would you like to learn or discuss? Any specific topics or questions?"
-                    rows={4} className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm resize-none" />
+                    rows={4}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm resize-none" />
                 </div>
 
-                <button onClick={handleProceedToPayment} disabled={!selectedDate || !selectedTime || submitting}
-                  className="w-full py-4 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl disabled:shadow-none flex items-center justify-center gap-2">
+                {/* Payment notice */}
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+                  <i className="fa-solid fa-building-columns text-blue-500 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-blue-900">
+                    <span className="font-bold">Bank transfer only.</span> After clicking below you'll see our GTB account details. Your booking is confirmed once your transfer is verified by our team.
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => { if (selectedDate && selectedTime) setShowPayment(true); }}
+                  disabled={!selectedDate || !selectedTime || submitting}
+                  className="w-full py-4 bg-indigo-600 text-white font-semibold rounded-xl hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl disabled:shadow-none flex items-center justify-center gap-2"
+                >
                   {submitting ? (
-                    <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>Saving booking…</>
+                    <><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />Saving…</>
                   ) : (
-                    <><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                    </svg>Proceed to Payment — {toNaira(calculateTotal())}</>
+                    <><i className="fa-solid fa-building-columns" />View Payment Details — {toNaira(calculateTotal())}</>
                   )}
                 </button>
 
                 <p className="text-center text-xs text-slate-400">
-                  🔒 Payment is processed securely before your session is confirmed
+                  🔒 Funds held in escrow · Tutors are paid only after session completion
                 </p>
               </div>
             </div>
           </div>
 
+          {/* Right: summary sidebar */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sticky top-6">
-              <h2 className="text-lg font-bold text-slate-900 mb-4">Session Summary</h2>
-              <div className="flex items-start gap-3 mb-6 pb-6 border-b border-slate-200">
-                <img src={tutor.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(tutor.name)}&background=6366f1&color=fff&size=56`}
-                  alt={tutor.name} className="w-14 h-14 rounded-full object-cover ring-2 ring-slate-100" />
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sticky top-6 space-y-5">
+              <h2 className="text-lg font-bold text-slate-900">Session Summary</h2>
+
+              <div className="flex items-start gap-3 pb-5 border-b border-slate-200">
+                <img
+                  src={tutor.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(tutor.name)}&background=6366f1&color=fff&size=56`}
+                  alt={tutor.name}
+                  className="w-14 h-14 rounded-full object-cover ring-2 ring-slate-100"
+                />
                 <div className="flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <h3 className="font-bold text-slate-900">{tutor.name}</h3>
-                    {tutor.verified && (
-                      <svg className="w-4 h-4 text-indigo-600" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                    )}
+                    {tutor.verified && <i className="fa-solid fa-circle-check text-indigo-600 text-sm" />}
                   </div>
-                  <p className="text-sm text-slate-600">{tutor.title}</p>
+                  <p className="text-sm text-slate-500">{tutor.title}</p>
                   <div className="flex items-center gap-1 mt-1">
-                    <svg className="w-4 h-4 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
+                    <i className="fa-solid fa-star text-yellow-400 text-xs" />
                     <span className="text-sm font-bold text-slate-700">{tutor.rating}</span>
                     <span className="text-xs text-slate-400">({tutor.reviewCount})</span>
                   </div>
@@ -493,20 +605,26 @@ export default function BookTutor() {
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-slate-500">Duration</span>
-                  <span className="font-semibold text-slate-900">{sessionTypes.find((s) => s.id === sessionType)?.label}</span>
+                  <span className="font-semibold text-slate-900">
+                    {sessionTypes.find((s) => s.id === sessionType)?.label}
+                  </span>
                 </div>
                 {selectedDate && (
                   <div className="flex justify-between">
                     <span className="text-slate-500">Date</span>
                     <span className="font-semibold text-slate-900">
-                      {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-NG", { month: "short", day: "numeric", year: "numeric" })}
+                      {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-NG", {
+                        month: "short", day: "numeric", year: "numeric",
+                      })}
                     </span>
                   </div>
                 )}
                 {selectedTime && (
                   <div className="flex justify-between">
                     <span className="text-slate-500">Time</span>
-                    <span className="font-semibold text-slate-900">{timeSlots.find((s) => s.value === selectedTime)?.label}</span>
+                    <span className="font-semibold text-slate-900">
+                      {timeSlots.find((s) => s.value === selectedTime)?.label}
+                    </span>
                   </div>
                 )}
                 <div className="border-t border-slate-200 pt-3">
@@ -520,23 +638,35 @@ export default function BookTutor() {
                 </div>
               </div>
 
-              <div className="mt-6 pt-6 border-t border-slate-200">
-                <div className="flex items-start gap-2 p-3 bg-amber-50 rounded-lg">
-                  <svg className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                  </svg>
-                  <p className="text-xs text-amber-900">
-                    Payment is required to confirm your booking. Funds are held in escrow and released to the mentor after the session.
-                  </p>
+              {/* Payment method badge */}
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 flex items-center gap-3">
+                <div className="w-9 h-9 bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <i className="fa-solid fa-building-columns text-indigo-600" />
                 </div>
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Bank Transfer</p>
+                  <p className="text-xs text-slate-500">GTB · AmTechy Technology Ltd</p>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+                <p className="text-xs text-amber-900">
+                  <i className="fa-solid fa-circle-info mr-1.5 text-amber-500" />
+                  Payment is held in escrow. Your tutor only receives payment after your session is completed.
+                </p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {showPayment && (
-        <PaymentModal tutor={tutor} amount={calculateTotal()} onSuccess={handlePaymentSuccess} onClose={() => setShowPayment(false)} />
+      {showPayment && tutor && (
+        <PaymentModal
+          amount={calculateTotal()}
+          tutorName={tutor.name}
+          onConfirm={handlePaymentConfirmed}
+          onClose={() => setShowPayment(false)}
+        />
       )}
     </main>
   );

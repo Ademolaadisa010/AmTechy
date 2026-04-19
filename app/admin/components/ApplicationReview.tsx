@@ -35,6 +35,14 @@ interface Application {
   yearsOfExperience?: number;
   rejectionReason?: string;
   userId?: string;
+  jobTitle?: string;
+  company?: string;
+  teachingStyle?: string;
+  studentsCount?: number;
+  taughtBefore?: string;
+  teachingLocation?: string;
+  location?: string;
+  experienceLevel?: string;
 }
 
 interface ApplicationReviewProps {
@@ -43,13 +51,11 @@ interface ApplicationReviewProps {
 
 // ── Safe converters ───────────────────────────────────────────────────────────
 
-/** Convert anything to a plain string — never passes an object to JSX */
 function toStr(val: any): string {
   if (val === null || val === undefined) return '';
   if (typeof val === 'string') return val;
   if (typeof val === 'number' || typeof val === 'boolean') return String(val);
   if (typeof val === 'object') {
-    // Object — join its string values
     return Object.entries(val)
       .filter(([, v]) => v && typeof v === 'string')
       .map(([k, v]) => `${k}: ${v}`)
@@ -58,7 +64,6 @@ function toStr(val: any): string {
   return '';
 }
 
-/** Convert anything to a string array */
 function toArr(val: any): string[] {
   if (!val) return [];
   if (Array.isArray(val)) return val.map(String).filter(Boolean);
@@ -68,47 +73,64 @@ function toArr(val: any): string[] {
 
 /** Map a raw Firestore document to a safe Application object */
 function mapDoc(id: string, raw: any): Application {
-  // motivation may be saved as an object: { whyTeach, whatMakesGreat, availability }
-  const motivationRaw = raw.motivation ?? raw.whyJoin ?? '';
-  const isMotivationObj = motivationRaw && typeof motivationRaw === 'object';
+  console.log('Mapping document:', id, raw); // Debug log
+  
+  // Extract from nested objects
+  const personalInfo = raw.personalInfo || {};
+  const professionalBg = raw.professionalBackground || {};
+  const teachingExp = raw.teachingExperience || {};
+  const expertise = raw.expertise || {};
+  
+  // Motivation object
+  const motivationRaw = raw.motivation ?? {};
+  const isMotivationObj = motivationRaw && typeof motivationRaw === 'object' && Object.keys(motivationRaw).length > 0;
 
-  const availability =
-    typeof raw.availability === 'string'
-      ? raw.availability
-      : isMotivationObj
-      ? toStr(motivationRaw?.availability)
-      : '';
+  // Get availability from multiple places
+  const availability = raw.availability ?? motivationRaw?.availability ?? teachingExp?.availability ?? '';
 
-  return {
+  // Build experience string from professional background
+  const experienceStr = professionalBg.yearsExperience
+    ? `${professionalBg.yearsExperience} years as ${professionalBg.jobTitle || 'Professional'} at ${professionalBg.company || 'Company'}`
+    : raw.experience ?? '';
+
+  // Get skills/expertise from nested structure
+  const skillsArray = toArr(expertise.primarySkills ?? expertise?.skills ?? raw.primarySkills ?? raw.expertise ?? raw.skills);
+
+  // Build the application object
+  const app: Application = {
     id,
-    applicantName:
-      toStr(raw.full || raw.personalInfo.fullName || raw.name || raw.displayName) || 'Unknown',
-    email: toStr(raw.personalInfo.email),
-    phone: toStr(raw.personalInfo.phone) || undefined,
-    expertise: toArr(raw.expertise.primarySkills ?? raw.skills ?? raw.subjects),
-    experience: toStr(raw.professionalBackground.yearsExperience ?? raw.workExperience ?? raw.background ?? "hi"),
-    portfolioUrl: toStr(raw.personalInfo.portfolioUrl ?? raw.portfolio) || undefined,
-    resumeUrl: toStr(raw.resumeUrl ?? raw.resume ?? raw.cvUrl) || undefined,
-    linkedinUrl: toStr(raw.linkedinUrl ?? raw.linkedin) || undefined,
+    applicantName: toStr(personalInfo.fullName || raw.fullName || raw.applicantName || raw.name) || 'Unknown',
+    email: toStr(personalInfo.email || raw.email),
+    phone: toStr(personalInfo.phone || raw.phone) || undefined,
+    location: toStr(personalInfo.location || raw.location) || undefined,
+    expertise: skillsArray,
+    experience: experienceStr,
+    portfolioUrl: toStr(professionalBg.portfolio || raw.portfolioUrl) || undefined,
+    resumeUrl: toStr(raw.resumeUrl || raw.resume) || undefined,
+    linkedinUrl: toStr(professionalBg.linkedIn || raw.linkedinUrl) || undefined,
     bio: toStr(raw.bio ?? raw.about ?? raw.description),
     status: raw.status ?? 'pending',
     submittedAt: raw.submittedAt ?? raw.createdAt ?? null,
-    // Split motivation object into named fields for clean rendering
     motivation: isMotivationObj ? '' : toStr(motivationRaw),
     whyTeach: isMotivationObj ? toStr(motivationRaw?.whyTeach) : undefined,
     whatMakesGreat: isMotivationObj ? toStr(motivationRaw?.whatMakesGreat) : undefined,
     availability,
-    hourlyRate:
-      typeof raw.hourlyRate === 'number'
-        ? raw.hourlyRate
-        : raw.rate
-        ? Number(raw.rate)
-        : undefined,
+    hourlyRate: typeof raw.hourlyRate === 'number' ? raw.hourlyRate : undefined,
     preferredLanguages: toArr(raw.preferredLanguages ?? raw.languages),
-    yearsOfExperience: raw.yearsOfExperience ?? raw.experience_years ?? undefined,
+    yearsOfExperience: professionalBg.yearsExperience ?? raw.yearsOfExperience ?? undefined,
     rejectionReason: toStr(raw.rejectionReason) || undefined,
     userId: toStr(raw.userId ?? raw.uid) || undefined,
+    jobTitle: toStr(professionalBg.jobTitle || raw.jobTitle) || undefined,
+    company: toStr(professionalBg.company || raw.company) || undefined,
+    teachingStyle: toStr(teachingExp.teachingStyle || raw.teachingStyle) || undefined,
+    studentsCount: teachingExp.studentsCount ?? raw.studentsCount ?? undefined,
+    taughtBefore: toStr(teachingExp.taughtBefore || raw.taughtBefore) || undefined,
+    teachingLocation: toStr(teachingExp.teachingLocation || raw.teachingLocation) || undefined,
+    experienceLevel: toStr(expertise.experienceLevel || raw.experienceLevel) || undefined,
   };
+
+  console.log('Mapped application:', app);
+  return app;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -142,7 +164,8 @@ export default function ApplicationReview({ onUpdate }: ApplicationReviewProps) 
       if (snapshot.size > 0) {
         console.log('Sample doc:', snapshot.docs[0].data());
       }
-      setApplications(snapshot.docs.map((d) => mapDoc(d.id, d.data())));
+      const mappedApps = snapshot.docs.map((d) => mapDoc(d.id, d.data()));
+      setApplications(mappedApps);
     } catch (err: any) {
       console.error('Fetch error:', err);
       showToast(
@@ -179,10 +202,14 @@ export default function ApplicationReview({ onUpdate }: ApplicationReviewProps) 
         portfolioUrl: application.portfolioUrl || '',
         linkedinUrl: application.linkedinUrl || '',
         resumeUrl: application.resumeUrl || '',
-        hourlyRate: application.hourlyRate || 0,
+        jobTitle: application.jobTitle || '',
+        company: application.company || '',
+        teachingStyle: application.teachingStyle || '',
+        studentsCount: application.studentsCount || 0,
         availability: application.availability,
         preferredLanguages: application.preferredLanguages || [],
         yearsOfExperience: application.yearsOfExperience || 0,
+        experienceLevel: application.experienceLevel || 'intermediate',
         rating: 0,
         totalReviews: 0,
         totalSessions: 0,
@@ -281,7 +308,7 @@ export default function ApplicationReview({ onUpdate }: ApplicationReviewProps) 
         {([
           { key: 'all', label: 'Total', color: 'text-slate-900' },
           { key: 'pending', label: 'Pending', color: 'text-blue-600' },
-          { key: 'approved', label: 'Approved', color: 'text-emerald-600' },
+          { key: 'approved', label: 'Approved', color: 'text-green-400' },
           { key: 'rejected', label: 'Rejected', color: 'text-red-600' },
         ] as const).map(({ key, label, color }) => (
           <button
@@ -327,7 +354,7 @@ export default function ApplicationReview({ onUpdate }: ApplicationReviewProps) 
             <table className="w-full">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
-                  {['Applicant', 'Expertise', 'Exp.', 'Rate', 'Status', 'Submitted', ''].map((h) => (
+                  {['Applicant', 'Skills', 'Experience', 'Teaching', 'Status', 'Submitted', ''].map((h) => (
                     <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">{h}</th>
                   ))}
                 </tr>
@@ -361,7 +388,7 @@ export default function ApplicationReview({ onUpdate }: ApplicationReviewProps) 
                       {app.yearsOfExperience ? `${app.yearsOfExperience} yrs` : '—'}
                     </td>
                     <td className="px-5 py-4 text-sm text-slate-700 whitespace-nowrap">
-                      {app.hourlyRate ? `$${app.hourlyRate}/hr` : '—'}
+                      {app.taughtBefore === 'yes' ? `${app.studentsCount || 0} students` : 'No experience'}
                     </td>
                     <td className="px-5 py-4">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${statusStyle(app.status)}`}>
@@ -432,9 +459,9 @@ export default function ApplicationReview({ onUpdate }: ApplicationReviewProps) 
               {/* Quick facts */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  { icon: 'fa-briefcase', label: 'Experience', value: selectedApp.yearsOfExperience ? `${selectedApp.yearsOfExperience} yrs` : '—' },
-                  { icon: 'fa-dollar-sign', label: 'Rate', value: selectedApp.hourlyRate ? `$${selectedApp.hourlyRate}/hr` : '—' },
-                  { icon: 'fa-clock', label: 'Availability', value: selectedApp.availability || '—' },
+                  { icon: 'fa-briefcase', label: 'Job Title', value: selectedApp.jobTitle || '—' },
+                  { icon: 'fa-building', label: 'Company', value: selectedApp.company || '—' },
+                  { icon: 'fa-clock', label: 'Availability', value: selectedApp.availability ? `${selectedApp.availability} hrs/week` : '—' },
                   { icon: 'fa-phone', label: 'Phone', value: selectedApp.phone || '—' },
                 ].map((f, i) => (
                   <div key={i} className="bg-slate-50 rounded-xl p-3">
@@ -447,10 +474,10 @@ export default function ApplicationReview({ onUpdate }: ApplicationReviewProps) 
                 ))}
               </div>
 
-              {/* Expertise */}
+              {/* Expertise/Skills */}
               {selectedApp.expertise.length > 0 && (
                 <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Expertise</p>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">🛠️ Primary Skills</p>
                   <div className="flex flex-wrap gap-2">
                     {selectedApp.expertise.map((s, i) => (
                       <span key={i} className="px-3 py-1 bg-indigo-100 text-indigo-800 text-sm rounded-full font-medium">{s}</span>
@@ -459,48 +486,55 @@ export default function ApplicationReview({ onUpdate }: ApplicationReviewProps) 
                 </div>
               )}
 
-              {/* Languages */}
-              {(selectedApp.preferredLanguages?.length ?? 0) > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Languages</p>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedApp.preferredLanguages!.map((l, i) => (
-                      <span key={i} className="px-3 py-1 bg-emerald-100 text-emerald-800 text-sm rounded-full font-medium">{l}</span>
-                    ))}
+              {/* Experience & Teaching */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {selectedApp.yearsOfExperience && (
+                  <div className="bg-amber-50 border-l-4 border-amber-400 rounded-r-xl p-4">
+                    <p className="text-xs font-bold text-amber-600 uppercase tracking-wider mb-1">💼 Experience</p>
+                    <p className="text-sm text-amber-900">{selectedApp.yearsOfExperience} years</p>
+                    {selectedApp.experience && <p className="text-xs text-amber-700 mt-1">{selectedApp.experience}</p>}
                   </div>
+                )}
+                {selectedApp.taughtBefore && (
+                  <div className="bg-green-50 border-l-4 border-green-400 rounded-r-xl p-4">
+                    <p className="text-xs font-bold text-green-600 uppercase tracking-wider mb-1">🎓 Teaching</p>
+                    <p className="text-sm text-green-900">{selectedApp.taughtBefore === 'yes' ? 'Yes' : 'No'}</p>
+                    {selectedApp.studentsCount && <p className="text-xs text-green-700 mt-1">{selectedApp.studentsCount} students taught</p>}
+                    {selectedApp.teachingLocation && <p className="text-xs text-green-700">{selectedApp.teachingLocation}</p>}
+                  </div>
+                )}
+              </div>
+
+              {/* Teaching Style */}
+              {selectedApp.teachingStyle && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">👨‍🏫 Teaching Style</p>
+                  <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 rounded-xl p-4">{selectedApp.teachingStyle}</p>
                 </div>
               )}
 
               {/* Bio */}
               {selectedApp.bio && (
                 <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Bio</p>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">📝 Bio</p>
                   <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 rounded-xl p-4">{selectedApp.bio}</p>
                 </div>
               )}
 
-              {/* Experience */}
-              {selectedApp.experience && (
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Work Experience</p>
-                  <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 rounded-xl p-4 whitespace-pre-wrap">{selectedApp.experience}</p>
-                </div>
-              )}
-
-              {/* Motivation — handles object shape { whyTeach, whatMakesGreat } or plain string */}
+              {/* Motivation */}
               {(selectedApp.whyTeach || selectedApp.whatMakesGreat || selectedApp.motivation) && (
                 <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Why AmTechy?</p>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">💡 Motivation & Questions</p>
                   <div className="bg-indigo-50 border-l-4 border-indigo-400 rounded-r-xl p-4 space-y-3">
                     {selectedApp.whyTeach && (
                       <div>
-                        <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1">Why Teach</p>
+                        <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider mb-1">Why Do You Want to Teach?</p>
                         <p className="text-sm text-slate-700 leading-relaxed">{selectedApp.whyTeach}</p>
                       </div>
                     )}
                     {selectedApp.whatMakesGreat && (
                       <div>
-                        <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1">What Makes You Great</p>
+                        <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider mb-1">What Makes You a Great Teacher?</p>
                         <p className="text-sm text-slate-700 leading-relaxed">{selectedApp.whatMakesGreat}</p>
                       </div>
                     )}
@@ -550,7 +584,7 @@ export default function ApplicationReview({ onUpdate }: ApplicationReviewProps) 
                 <button
                   onClick={() => handleApprove(selectedApp)}
                   disabled={processing}
-                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-green-600 hover:bg-green-700 text-white rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-2"
                 >
                   {processing ? <><i className="fa-solid fa-spinner fa-spin" /> Processing…</> : <><i className="fa-solid fa-circle-check" /> Approve & Create Profile</>}
                 </button>
