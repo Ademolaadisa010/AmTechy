@@ -30,7 +30,7 @@ export default function BottomBar(){
         { href: "/dashboard", icon: "fa-house", label: "Home" },
         { href: "/mylearning", icon: "fa-book-open", label: "Learning" },
         { href: "/find-tutor", icon: "fa-users", label: "Tutors" },
-        { href: "/jobs", icon: "fa-briefcase", label: "Jobs" },
+        // { href: "/jobs", icon: "fa-briefcase", label: "Jobs" },
         { href: "/community", icon: "fa-message", label: "Community" },
         { href: "/progress", icon: "fa-chart-line", label: "Progress" },
         { href: "/profile", icon: "fa-user", label: "Profile" },

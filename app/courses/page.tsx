@@ -295,54 +295,6 @@ export default function BrowseCourses() {
               </div>
             )}
 
-            {/* Filters */}
-            <div className="space-y-4">
-              {/* Category Filter */}
-              <div>
-                <h3 className="text-sm font-semibold text-slate-700 mb-3">
-                  Categories
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {categories.map((category) => (
-                    <button
-                      key={category.id}
-                      onClick={() => setSelectedCategory(category.id)}
-                      className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                        selectedCategory === category.id
-                          ? "bg-indigo-600 text-white shadow-md"
-                          : "bg-white text-slate-700 border border-slate-200 hover:border-indigo-300"
-                      }`}
-                    >
-                      <span className="mr-2">{category.icon}</span>
-                      {category.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Level Filter */}
-              <div>
-                <h3 className="text-sm font-semibold text-slate-700 mb-3">
-                  Difficulty Level
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {levels.map((level) => (
-                    <button
-                      key={level.id}
-                      onClick={() => setSelectedLevel(level.id)}
-                      className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                        selectedLevel === level.id
-                          ? "bg-indigo-600 text-white shadow-md"
-                          : "bg-white text-slate-700 border border-slate-200 hover:border-indigo-300"
-                      }`}
-                    >
-                      {level.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
             {/* Results Count */}
             <div className="flex items-center justify-between">
               <p className="text-slate-600">

@@ -4,13 +4,14 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import SideBar from "../sidebar/page";
 import BottomBar from "../bottom-bar/page";
-import { auth, db } from "@/lib/firebase";
+import { auth, db, storage } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   collection, addDoc, query, orderBy, limit, getDocs,
   serverTimestamp, doc, getDoc, updateDoc, arrayUnion,
-  arrayRemove, where, deleteDoc,
+  arrayRemove, where, deleteDoc, onSnapshot,
 } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 interface UserProfile {
   uid: string;
@@ -70,7 +71,11 @@ interface Group {
 interface Message {
   id: string;
   senderId: string;
+  senderName: string;
+  senderAvatar?: string;
   content: string;
+  mediaUrl?: string;
+  mediaType?: "image" | "video";
   timestamp: Date;
 }
 
@@ -118,11 +123,9 @@ function FriendCard({ friend, currentUser, mutualCount, onViewProfile, onMessage
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden hover:shadow-md transition-all group">
-      {/* Cover banner */}
       <div className="h-16 bg-gradient-to-r from-indigo-400 to-purple-500 relative">
         <div className="absolute inset-0 opacity-20"
           style={{ backgroundImage: "radial-gradient(circle at 20% 50%, white 1px, transparent 1px), radial-gradient(circle at 80% 20%, white 1px, transparent 1px)", backgroundSize: "30px 30px" }} />
-        {/* Menu button */}
         <div className="absolute top-2 right-2">
           <button onClick={() => setShowMenu(!showMenu)}
             className="w-7 h-7 bg-white/20 hover:bg-white/30 rounded-full flex items-center justify-center text-white transition-colors">
@@ -149,7 +152,6 @@ function FriendCard({ friend, currentUser, mutualCount, onViewProfile, onMessage
       </div>
 
       <div className="px-4 pb-4">
-        {/* Avatar */}
         <div className="-mt-8 mb-3 flex items-end justify-between">
           <img
             src={friend.photoURL || avatarUrl(friend.displayName)}
@@ -165,7 +167,6 @@ function FriendCard({ friend, currentUser, mutualCount, onViewProfile, onMessage
           </button>
         </div>
 
-        {/* Name & title */}
         <h3
           className="font-bold text-slate-900 text-base cursor-pointer hover:text-indigo-600 transition-colors leading-tight"
           onClick={() => onViewProfile(friend.uid)}
@@ -176,7 +177,6 @@ function FriendCard({ friend, currentUser, mutualCount, onViewProfile, onMessage
           <p className="text-xs text-indigo-500 font-medium mt-0.5">{friend.title}</p>
         )}
 
-        {/* Career goal */}
         {friend.careerGoal && (
           <div className="flex items-center gap-1.5 mt-2">
             <span className="text-sm">{CAREER_ICONS[friend.careerGoal] || "💼"}</span>
@@ -184,12 +184,10 @@ function FriendCard({ friend, currentUser, mutualCount, onViewProfile, onMessage
           </div>
         )}
 
-        {/* Bio */}
         {friend.bio && (
           <p className="text-xs text-slate-500 mt-2 line-clamp-2 leading-relaxed">{friend.bio}</p>
         )}
 
-        {/* Skills */}
         {friend.skills && friend.skills.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-3">
             {friend.skills.slice(0, 3).map((skill) => (
@@ -205,7 +203,6 @@ function FriendCard({ friend, currentUser, mutualCount, onViewProfile, onMessage
           </div>
         )}
 
-        {/* Footer stats */}
         <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100">
           <div className="flex items-center gap-1 text-xs text-slate-500">
             <i className="fa-solid fa-user-group text-slate-300 text-xs"></i>
@@ -229,7 +226,7 @@ function ProfileModal({ profile, currentUserId, currentUserFriends, onClose, onF
   currentUserId: string;
   currentUserFriends: string[];
   onClose: () => void;
-  onFriendAction: (targetId: string, action: "send" | "unfriend") => void;
+  onFriendAction: (targetId: string, action: "send" | "unfriend") => Promise<void>;
   onMessage?: (profile: UserProfile) => void;
 }) {
   const isFriend = currentUserFriends.includes(profile.uid);
@@ -239,7 +236,6 @@ function ProfileModal({ profile, currentUserId, currentUserFriends, onClose, onF
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        {/* Cover */}
         <div className="h-32 bg-gradient-to-r from-indigo-500 to-purple-600 relative">
           <div className="absolute inset-0 opacity-20"
             style={{ backgroundImage: "radial-gradient(circle at 25% 50%, white 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
@@ -250,7 +246,6 @@ function ProfileModal({ profile, currentUserId, currentUserFriends, onClose, onF
         </div>
 
         <div className="px-6 pb-6">
-          {/* Avatar row */}
           <div className="flex items-end justify-between -mt-10 mb-4">
             <img
               src={profile.photoURL || avatarUrl(profile.displayName)}
@@ -274,11 +269,9 @@ function ProfileModal({ profile, currentUserId, currentUserFriends, onClose, onF
             )}
           </div>
 
-          {/* Name */}
           <h2 className="text-xl font-bold text-slate-900">{profile.displayName}</h2>
           {profile.title && <p className="text-sm text-indigo-600 font-medium mt-0.5">{profile.title}</p>}
 
-          {/* Career goal */}
           {profile.careerGoal && (
             <div className="flex items-center gap-2 mt-2">
               <span className="text-base">{CAREER_ICONS[profile.careerGoal] || "💼"}</span>
@@ -286,12 +279,10 @@ function ProfileModal({ profile, currentUserId, currentUserFriends, onClose, onF
             </div>
           )}
 
-          {/* Bio */}
           {profile.bio && (
             <p className="text-sm text-slate-600 mt-3 leading-relaxed bg-slate-50 rounded-xl px-3 py-2">{profile.bio}</p>
           )}
 
-          {/* Skills */}
           {profile.skills && profile.skills.length > 0 && (
             <div className="mt-4">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Skills</p>
@@ -303,7 +294,6 @@ function ProfileModal({ profile, currentUserId, currentUserFriends, onClose, onF
             </div>
           )}
 
-          {/* Stats */}
           <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-4 text-center">
             <div className="bg-slate-50 rounded-xl py-3">
               <p className="text-xl font-bold text-slate-900">{profile.friends?.length || 0}</p>
@@ -327,18 +317,53 @@ function CreatePostModal({ user, onClose, onPost }: {
   onPost: (content: string, mediaUrl?: string, mediaType?: "image" | "video") => Promise<void>;
 }) {
   const [content, setContent] = useState("");
-  const [mediaUrl, setMediaUrl] = useState("");
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<string>("");
   const [mediaType, setMediaType] = useState<"image" | "video" | undefined>();
-  const [urlInput, setUrlInput] = useState("");
-  const [mediaMode, setMediaMode] = useState<"none" | "image" | "video">("none");
   const [posting, setPosting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isImage = file.type.startsWith("image/");
+    const isVideo = file.type.startsWith("video/");
+
+    if (!isImage && !isVideo) {
+      alert("Please upload an image or video");
+      return;
+    }
+
+    setMediaFile(file);
+    setMediaType(isImage ? "image" : "video");
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setMediaPreview(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handlePost = async () => {
     if (!content.trim()) return;
     setPosting(true);
-    await onPost(content, mediaUrl || undefined, mediaType);
-    setPosting(false);
-    onClose();
+    try {
+      let mediaUrl = undefined;
+      if (mediaFile) {
+        const fileName = `posts/${Date.now()}_${mediaFile.name}`;
+        const storageRef = ref(storage, fileName);
+        await uploadBytes(storageRef, mediaFile);
+        mediaUrl = await getDownloadURL(storageRef);
+      }
+      await onPost(content, mediaUrl, mediaType);
+      setPosting(false);
+      onClose();
+    } catch (err) {
+      console.error("Upload error:", err);
+      alert("Failed to upload media");
+      setPosting(false);
+    }
   };
 
   return (
@@ -363,46 +388,33 @@ function CreatePostModal({ user, onClose, onPost }: {
             placeholder={`What's on your mind, ${user.displayName.split(" ")[0]}?`}
             className="w-full text-slate-900 placeholder-slate-400 focus:outline-none resize-none text-base leading-relaxed" />
 
-          {mediaUrl && mediaType === "image" && (
+          {mediaPreview && (
             <div className="relative rounded-xl overflow-hidden">
-              <img src={mediaUrl} alt="preview" className="w-full max-h-48 object-cover" />
-              <button onClick={() => { setMediaUrl(""); setMediaType(undefined); setUrlInput(""); }}
+              {mediaType === "image" ? (
+                <img src={mediaPreview} alt="preview" className="w-full max-h-48 object-cover" />
+              ) : (
+                <video src={mediaPreview} controls className="w-full max-h-48 rounded-xl" />
+              )}
+              <button onClick={() => { setMediaFile(null); setMediaPreview(""); setMediaType(undefined); }}
                 className="absolute top-2 right-2 w-7 h-7 bg-black/50 text-white rounded-full flex items-center justify-center text-xs">
                 <i className="fa-solid fa-xmark"></i>
               </button>
-            </div>
-          )}
-          {mediaUrl && mediaType === "video" && (
-            <div className="relative rounded-xl overflow-hidden">
-              <video src={mediaUrl} controls className="w-full max-h-48 rounded-xl" />
-              <button onClick={() => { setMediaUrl(""); setMediaType(undefined); setUrlInput(""); }}
-                className="absolute top-2 right-2 w-7 h-7 bg-black/50 text-white rounded-full flex items-center justify-center text-xs">
-                <i className="fa-solid fa-xmark"></i>
-              </button>
-            </div>
-          )}
-
-          {mediaMode !== "none" && !mediaUrl && (
-            <div className="flex gap-2">
-              <input value={urlInput} onChange={(e) => setUrlInput(e.target.value)}
-                placeholder={mediaMode === "image" ? "Paste image URL…" : "Paste video URL…"}
-                className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              <button onClick={() => { setMediaUrl(urlInput.trim()); setMediaType(mediaMode as "image" | "video"); }}
-                disabled={!urlInput.trim()}
-                className="px-3 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 disabled:opacity-50">Add</button>
             </div>
           )}
 
           <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
             <span className="text-xs font-semibold text-slate-500 mr-1">Add:</span>
-            <button onClick={() => setMediaMode(mediaMode === "image" ? "none" : "image")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${mediaMode === "image" ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
-              <i className="fa-solid fa-image"></i> Photo
+            <button onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200 rounded-lg text-xs font-medium transition-colors">
+              <i className="fa-solid fa-image"></i> Photo/Video
             </button>
-            <button onClick={() => setMediaMode(mediaMode === "video" ? "none" : "video")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${mediaMode === "video" ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
-              <i className="fa-solid fa-video"></i> Video
-            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
           </div>
 
           <button onClick={handlePost} disabled={!content.trim() || posting}
@@ -492,9 +504,10 @@ function CreateGroupModal({ currentUser, allUsers, onClose, onCreate }: {
 }
 
 // ─── Group Detail Modal ───────────────────────────────────────────────────────
-function GroupDetailModal({ group, allUsers, currentUserId, onClose, onAddMember, onLeave }: {
+function GroupDetailModal({ group, allUsers, currentUserId, onClose, onAddMember, onLeave, onMessage }: {
   group: Group; allUsers: UserProfile[]; currentUserId: string;
   onClose: () => void; onAddMember: (gid: string, uid: string) => Promise<void>; onLeave: (gid: string) => Promise<void>;
+  onMessage: (gid: string, groupName: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const members = allUsers.filter((u) => group.memberIds.includes(u.uid));
@@ -516,14 +529,22 @@ function GroupDetailModal({ group, allUsers, currentUserId, onClose, onAddMember
           {group.description && <p className="text-sm text-slate-600">{group.description}</p>}
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-slate-700">{members.length} member{members.length !== 1 ? "s" : ""}</p>
-            {!isMember && (
-              <button onClick={() => onAddMember(group.id, currentUserId)}
-                className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700">Join Group</button>
-            )}
-            {isMember && !isAdmin && (
-              <button onClick={() => { onLeave(group.id); onClose(); }}
-                className="px-3 py-1.5 bg-red-50 text-red-600 text-xs font-semibold rounded-lg hover:bg-red-100">Leave Group</button>
-            )}
+            <div className="flex gap-2">
+              {isMember && (
+                <button onClick={() => { onMessage(group.id, group.name); onClose(); }}
+                  className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700">
+                  💬 Chat
+                </button>
+              )}
+              {!isMember && (
+                <button onClick={() => onAddMember(group.id, currentUserId)}
+                  className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700">Join Group</button>
+              )}
+              {isMember && !isAdmin && (
+                <button onClick={() => { onLeave(group.id); onClose(); }}
+                  className="px-3 py-1.5 bg-red-50 text-red-600 text-xs font-semibold rounded-lg hover:bg-red-100">Leave Group</button>
+              )}
+            </div>
           </div>
           <div className="space-y-2 max-h-40 overflow-y-auto">
             {members.map((m) => (
@@ -604,7 +625,6 @@ function PostCard({ post, currentUser, onLike, onComment, onViewProfile }: {
         {[
           { icon: liked ? "fa-solid fa-heart" : "fa-regular fa-heart", label: "Like", action: () => onLike(post.id), active: liked },
           { icon: "fa-regular fa-comment", label: "Comment", action: () => setShowComments(!showComments), active: false },
-          { icon: "fa-regular fa-share-from-square", label: "Share", action: () => {}, active: false },
         ].map((btn) => (
           <button key={btn.label} onClick={btn.action}
             className={`flex-1 flex items-center justify-center gap-2 py-2.5 hover:bg-slate-50 transition-colors text-sm font-medium ${btn.active ? "text-rose-500" : "text-slate-500"}`}>
@@ -662,9 +682,13 @@ export default function Community() {
   const [viewingGroup, setViewingGroup] = useState<Group | null>(null);
 
   const [selectedChat, setSelectedChat] = useState<UserProfile | null>(null);
+  const [selectedGroupChat, setSelectedGroupChat] = useState<{ groupId: string; groupName: string } | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [messageText, setMessageText] = useState("");
+  const [messageFile, setMessageFile] = useState<File | null>(null);
+  const [messagePreview, setMessagePreview] = useState<string>("");
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const messageFileInputRef = useRef<HTMLInputElement>(null);
 
   const pendingRequests = friendRequests.filter((r) => r.toId === currentUser?.uid && r.status === "pending");
 
@@ -674,7 +698,7 @@ export default function Community() {
       const ud = (await getDoc(doc(db, "users", fu.uid))).data() || {};
       setCurrentUser({
         uid: fu.uid,
-        displayName: ud.name || fu.displayName || "User",
+        displayName: ud.fullName || ud.name || fu.displayName || "User",
         photoURL: ud.photoURL || fu.photoURL || undefined,
         title: ud.title, bio: ud.bio, careerGoal: ud.careerGoal,
         skills: ud.skills || [], friends: ud.friends || [],
@@ -738,7 +762,21 @@ export default function Community() {
     try {
       const snap = await getDocs(query(collection(db, "chats", chatId, "messages"), orderBy("timestamp", "asc"), limit(50)));
       setMessages(snap.docs.map((d) => ({
-        id: d.id, senderId: d.data().senderId, content: d.data().content,
+        id: d.id, senderId: d.data().senderId, senderName: d.data().senderName,
+        senderAvatar: d.data().senderAvatar, content: d.data().content,
+        mediaUrl: d.data().mediaUrl, mediaType: d.data().mediaType,
+        timestamp: d.data().timestamp?.toDate() || new Date(),
+      })));
+    } catch { setMessages([]); }
+  };
+
+  const loadGroupMessages = async (groupId: string) => {
+    try {
+      const snap = await getDocs(query(collection(db, "groups", groupId, "messages"), orderBy("timestamp", "asc"), limit(50)));
+      setMessages(snap.docs.map((d) => ({
+        id: d.id, senderId: d.data().senderId, senderName: d.data().senderName,
+        senderAvatar: d.data().senderAvatar, content: d.data().content,
+        mediaUrl: d.data().mediaUrl, mediaType: d.data().mediaType,
         timestamp: d.data().timestamp?.toDate() || new Date(),
       })));
     } catch { setMessages([]); }
@@ -749,7 +787,7 @@ export default function Community() {
     await addDoc(collection(db, "posts"), {
       userId: currentUser.uid, userName: currentUser.displayName,
       userAvatar: currentUser.photoURL || null, userTitle: currentUser.title || null,
-      content, mediaUrl: mediaUrl || null, mediaType: mediaType || null,
+      content, mediaUrl: mediaUrl || undefined, mediaType: mediaType || undefined,
       likes: [], comments: [], createdAt: serverTimestamp(),
     });
     await fetchPosts();
@@ -777,16 +815,29 @@ export default function Community() {
   const handleFriendAction = async (targetId: string, action: "send" | "unfriend") => {
     if (!currentUser) return;
     if (action === "send") {
+      // Check if request already exists
+      const existingRequest = await getDocs(query(
+        collection(db, "friendRequests"),
+        where("fromId", "==", currentUser.uid),
+        where("toId", "==", targetId)
+      ));
+      if (existingRequest.docs.length > 0) {
+        alert("Friend request already sent");
+        return;
+      }
+
       const target = allUsers.find((u) => u.uid === targetId);
       await addDoc(collection(db, "friendRequests"), {
         fromId: currentUser.uid, fromName: currentUser.displayName,
         fromAvatar: currentUser.photoURL || null, fromTitle: currentUser.title || null,
         toId: targetId, status: "pending", createdAt: serverTimestamp(),
       });
+      alert("Friend request sent!");
     } else {
       await updateDoc(doc(db, "users", currentUser.uid), { friends: arrayRemove(targetId) });
       await updateDoc(doc(db, "users", targetId), { friends: arrayRemove(currentUser.uid) });
       setCurrentUser((p) => p ? { ...p, friends: p.friends?.filter((id) => id !== targetId) } : p);
+      await fetchAllUsers();
     }
   };
 
@@ -796,6 +847,7 @@ export default function Community() {
       await updateDoc(doc(db, "users", currentUser.uid), { friends: arrayUnion(req.fromId) });
       await updateDoc(doc(db, "users", req.fromId), { friends: arrayUnion(currentUser.uid) });
       setCurrentUser((p) => p ? { ...p, friends: [...(p.friends || []), req.fromId] } : p);
+      await fetchAllUsers();
     }
     setFriendRequests((p) => p.filter((r) => r.id !== req.id));
   };
@@ -821,19 +873,111 @@ export default function Community() {
     await fetchGroups();
   };
 
-  const handleSendMessage = async () => {
-    if (!messageText.trim() || !selectedChat || !currentUser) return;
-    const chatId = [currentUser.uid, selectedChat.uid].sort().join("_");
-    await addDoc(collection(db, "chats", chatId, "messages"), {
-      senderId: currentUser.uid, content: messageText.trim(), timestamp: serverTimestamp(),
-    });
-    setMessages((p) => [...p, { id: Date.now().toString(), senderId: currentUser.uid, content: messageText.trim(), timestamp: new Date() }]);
-    setMessageText("");
+  const handleMessageFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const isImage = file.type.startsWith("image/");
+    const isVideo = file.type.startsWith("video/");
+
+    if (!isImage && !isVideo) {
+      alert("Please upload an image or video");
+      return;
+    }
+
+    setMessageFile(file);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setMessagePreview(event.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSendMessage = async (isGroupChat: boolean = false) => {
+    if (!messageText.trim() && !messageFile) return;
+    if (!currentUser) return;
+
+    try {
+      let mediaUrl: string | undefined = undefined;
+      let mediaType: "image" | "video" | undefined = undefined;
+
+      if (messageFile) {
+        const isImage = messageFile.type.startsWith("image/");
+        mediaType = isImage ? "image" : "video";
+        const fileName = `messages/${Date.now()}_${messageFile.name}`;
+        const storageRef = ref(storage, fileName);
+        await uploadBytes(storageRef, messageFile);
+        mediaUrl = await getDownloadURL(storageRef);
+      }
+
+      if (isGroupChat && selectedGroupChat) {
+        await addDoc(collection(db, "groups", selectedGroupChat.groupId, "messages"), {
+          senderId: currentUser.uid,
+          senderName: currentUser.displayName,
+          senderAvatar: currentUser.photoURL || null,
+          content: messageText.trim(),
+          mediaUrl: mediaUrl || null,
+          mediaType: mediaType || null,
+          timestamp: serverTimestamp(),
+        });
+        
+        const newMessage: Message = {
+          id: Date.now().toString(),
+          senderId: currentUser.uid,
+          senderName: currentUser.displayName,
+          senderAvatar: currentUser.photoURL || undefined,
+          content: messageText.trim(),
+          mediaUrl: mediaUrl,
+          mediaType: mediaType,
+          timestamp: new Date(),
+        };
+        setMessages((p) => [...p, newMessage]);
+      } else if (selectedChat) {
+        const chatId = [currentUser.uid, selectedChat.uid].sort().join("_");
+        await addDoc(collection(db, "chats", chatId, "messages"), {
+          senderId: currentUser.uid,
+          senderName: currentUser.displayName,
+          senderAvatar: currentUser.photoURL || null,
+          content: messageText.trim(),
+          mediaUrl: mediaUrl || null,
+          mediaType: mediaType || null,
+          timestamp: serverTimestamp(),
+        });
+
+        const newMessage: Message = {
+          id: Date.now().toString(),
+          senderId: currentUser.uid,
+          senderName: currentUser.displayName,
+          senderAvatar: currentUser.photoURL || undefined,
+          content: messageText.trim(),
+          mediaUrl: mediaUrl,
+          mediaType: mediaType,
+          timestamp: new Date(),
+        };
+        setMessages((p) => [...p, newMessage]);
+      }
+
+      setMessageText("");
+      setMessageFile(null);
+      setMessagePreview("");
+    } catch (err) {
+      console.error("Message send error:", err);
+      alert("Failed to send message");
+    }
   };
 
   const openChat = (friend: UserProfile) => {
     setSelectedChat(friend);
+    setSelectedGroupChat(null);
     loadMessages(friend.uid);
+    setActiveTab("chat");
+  };
+
+  const openGroupChat = (groupId: string, groupName: string) => {
+    setSelectedGroupChat({ groupId, groupName });
+    setSelectedChat(null);
+    loadGroupMessages(groupId);
     setActiveTab("chat");
   };
 
@@ -907,7 +1051,7 @@ export default function Community() {
                     </button>
                   </div>
                   <div className="flex items-center justify-around mt-3 pt-3 border-t border-slate-100">
-                    {[{ icon: "fa-image", label: "Photo", color: "text-green-500" }, { icon: "fa-video", label: "Video", color: "text-red-500" }, { icon: "fa-face-smile", label: "Feeling", color: "text-yellow-500" }].map((btn) => (
+                    {[{ icon: "fa-image", label: "Photo/Video", color: "text-blue-500" }, { icon: "fa-face-smile", label: "Feeling", color: "text-yellow-500" }].map((btn) => (
                       <button key={btn.label} onClick={() => setShowCreatePost(true)}
                         className="flex items-center gap-2 px-4 py-2 hover:bg-slate-100 rounded-xl transition-colors">
                         <i className={`fa-solid ${btn.icon} ${btn.color} text-sm`}></i>
@@ -993,7 +1137,6 @@ export default function Community() {
           {/* ── FRIENDS TAB ── */}
           {activeTab === "friends" && (
             <div className="space-y-6 max-w-5xl">
-              {/* Pending requests */}
               {pendingRequests.length > 0 && (
                 <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
                   <h2 className="font-bold text-slate-900 mb-4 flex items-center gap-2">
@@ -1029,14 +1172,12 @@ export default function Community() {
                 </div>
               )}
 
-              {/* Your friends */}
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="font-bold text-slate-900">
                     Your Friends
                     <span className="ml-2 text-indigo-600 font-normal">({filteredFriends.length})</span>
                   </h2>
-                  {/* Search */}
                   <div className="relative">
                     <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                     <input value={friendSearch} onChange={(e) => setFriendSearch(e.target.value)}
@@ -1071,7 +1212,6 @@ export default function Community() {
                 )}
               </div>
 
-              {/* Discover */}
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="font-bold text-slate-900">
@@ -1184,59 +1324,120 @@ export default function Community() {
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto">
-                  {allUsers.filter((u) => u.uid !== currentUser.uid).map((u) => (
-                    <div key={u.uid} onClick={() => { setSelectedChat(u); loadMessages(u.uid); }}
-                      className={`flex items-center gap-3 p-4 cursor-pointer transition-colors ${selectedChat?.uid === u.uid ? "bg-indigo-50" : "hover:bg-slate-50"}`}>
-                      <div className="relative">
-                        <img src={u.photoURL || avatarUrl(u.displayName)} alt={u.displayName} className="w-10 h-10 rounded-full object-cover" />
-                        <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></div>
+                  <div className="p-4 border-b border-slate-100">
+                    <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Friends</p>
+                    {allUsers.filter((u) => u.uid !== currentUser.uid && currentUser.friends?.includes(u.uid)).map((u) => (
+                      <div key={u.uid} onClick={() => openChat(u)}
+                        className={`flex items-center gap-3 p-3 cursor-pointer rounded-lg transition-colors ${selectedChat?.uid === u.uid ? "bg-indigo-50" : "hover:bg-slate-50"}`}>
+                        <div className="relative">
+                          <img src={u.photoURL || avatarUrl(u.displayName)} alt={u.displayName} className="w-10 h-10 rounded-full object-cover" />
+                          <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></div>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-slate-900 text-sm truncate">{u.displayName}</p>
+                          {u.title && <p className="text-xs text-slate-400 truncate">{u.title}</p>}
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-slate-900 text-sm truncate">{u.displayName}</p>
-                        {u.title && <p className="text-xs text-slate-400 truncate">{u.title}</p>}
+                    ))}
+                  </div>
+
+                  <div className="p-4">
+                    <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Groups</p>
+                    {groups.filter((g) => g.memberIds.includes(currentUser.uid)).map((g) => (
+                      <div key={g.id} onClick={() => openGroupChat(g.id, g.name)}
+                        className={`flex items-center gap-3 p-3 cursor-pointer rounded-lg transition-colors ${selectedGroupChat?.groupId === g.id ? "bg-indigo-50" : "hover:bg-slate-50"}`}>
+                        <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${g.coverColor} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
+                          {g.name.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-slate-900 text-sm truncate">{g.name}</p>
+                          <p className="text-xs text-slate-400">{g.memberIds.length} members</p>
+                        </div>
                       </div>
-                      {currentUser.friends?.includes(u.uid) && <span className="w-2 h-2 bg-indigo-400 rounded-full flex-shrink-0"></span>}
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
               <div className="lg:col-span-2 flex flex-col">
-                {selectedChat ? (
+                {selectedChat || selectedGroupChat ? (
                   <>
                     <div className="p-4 border-b border-slate-100 flex items-center gap-3">
-                      <img src={selectedChat.photoURL || avatarUrl(selectedChat.displayName)} alt="" className="w-9 h-9 rounded-full object-cover" />
-                      <div className="flex-1">
-                        <p className="font-semibold text-slate-900 text-sm">{selectedChat.displayName}</p>
-                        {selectedChat.title && <p className="text-xs text-slate-400">{selectedChat.title}</p>}
-                      </div>
-                      <button onClick={() => setViewingProfile(selectedChat)} className="px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100">View Profile</button>
+                      {selectedChat && (
+                        <>
+                          <img src={selectedChat.photoURL || avatarUrl(selectedChat.displayName)} alt="" className="w-9 h-9 rounded-full object-cover" />
+                          <div className="flex-1">
+                            <p className="font-semibold text-slate-900 text-sm">{selectedChat.displayName}</p>
+                            {selectedChat.title && <p className="text-xs text-slate-400">{selectedChat.title}</p>}
+                          </div>
+                          <button onClick={() => setViewingProfile(selectedChat)} className="px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100">View Profile</button>
+                        </>
+                      )}
+                      {selectedGroupChat && (
+                        <>
+                          <div className="flex-1">
+                            <p className="font-semibold text-slate-900 text-sm">{selectedGroupChat.groupName}</p>
+                            <p className="text-xs text-slate-400">Group Chat</p>
+                          </div>
+                        </>
+                      )}
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 space-y-3">
                       {messages.map((msg) => {
                         const isMine = msg.senderId === currentUser.uid;
                         return (
                           <div key={msg.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
-                            {!isMine && <img src={selectedChat.photoURL || avatarUrl(selectedChat.displayName)} alt="" className="w-7 h-7 rounded-full mr-2 self-end flex-shrink-0 object-cover" />}
-                            <div className={`max-w-xs px-4 py-2.5 rounded-2xl text-sm ${isMine ? "bg-indigo-600 text-white rounded-br-sm" : "bg-slate-100 text-slate-900 rounded-bl-sm"}`}>
-                              <p>{msg.content}</p>
-                              <p className={`text-xs mt-1 ${isMine ? "text-indigo-200" : "text-slate-400"}`}>
-                                {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                              </p>
+                            {!isMine && <img src={msg.senderAvatar || avatarUrl(msg.senderName)} alt="" className="w-7 h-7 rounded-full mr-2 self-end flex-shrink-0 object-cover" />}
+                            <div className={`max-w-xs ${isMine ? "" : "mr-2"}`}>
+                              {!isMine && selectedGroupChat && <p className="text-xs font-semibold text-slate-600 mb-1">{msg.senderName}</p>}
+                              {msg.mediaUrl && msg.mediaType === "image" && <img src={msg.mediaUrl} alt="Message" className="max-w-xs rounded-2xl mb-1" />}
+                              {msg.mediaUrl && msg.mediaType === "video" && <video src={msg.mediaUrl} controls className="max-w-xs rounded-2xl mb-1" />}
+                              <div className={`px-4 py-2.5 rounded-2xl text-sm ${isMine ? "bg-indigo-600 text-white rounded-br-sm" : "bg-slate-100 text-slate-900 rounded-bl-sm"}`}>
+                                <p>{msg.content}</p>
+                                <p className={`text-xs mt-1 ${isMine ? "text-indigo-200" : "text-slate-400"}`}>
+                                  {msg.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                </p>
+                              </div>
                             </div>
                           </div>
                         );
                       })}
                       <div ref={chatBottomRef} />
                     </div>
-                    <div className="p-4 border-t border-slate-100 flex items-center gap-3">
-                      <input value={messageText} onChange={(e) => setMessageText(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleSendMessage()}
-                        placeholder="Type a message…"
-                        className="flex-1 bg-slate-100 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
-                      <button onClick={handleSendMessage} disabled={!messageText.trim()}
-                        className="w-10 h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center disabled:opacity-40 transition-colors flex-shrink-0">
-                        <i className="fa-solid fa-paper-plane text-sm"></i>
-                      </button>
+                    <div className="p-4 border-t border-slate-100 space-y-2">
+                      {messagePreview && (
+                        <div className="relative max-w-xs">
+                          {messageFile?.type.startsWith("image/") ? (
+                            <img src={messagePreview} alt="preview" className="max-w-xs rounded-xl" />
+                          ) : (
+                            <video src={messagePreview} controls className="max-w-xs rounded-xl" />
+                          )}
+                          <button onClick={() => { setMessageFile(null); setMessagePreview(""); }}
+                            className="absolute top-2 right-2 w-6 h-6 bg-black/50 text-white rounded-full flex items-center justify-center text-xs">
+                            <i className="fa-solid fa-xmark"></i>
+                          </button>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-3">
+                        <input value={messageText} onChange={(e) => setMessageText(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleSendMessage(!!selectedGroupChat)}
+                          placeholder="Type a message…"
+                          className="flex-1 bg-slate-100 rounded-full px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                        <button onClick={() => messageFileInputRef.current?.click()}
+                          className="w-10 h-10 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full flex items-center justify-center transition-colors flex-shrink-0">
+                          <i className="fa-solid fa-paperclip text-sm"></i>
+                        </button>
+                        <button onClick={() => handleSendMessage(!!selectedGroupChat)} disabled={!messageText.trim() && !messageFile}
+                          className="w-10 h-10 bg-indigo-600 hover:bg-indigo-700 text-white rounded-full flex items-center justify-center disabled:opacity-40 transition-colors flex-shrink-0">
+                          <i className="fa-solid fa-paper-plane text-sm"></i>
+                        </button>
+                        <input
+                          ref={messageFileInputRef}
+                          type="file"
+                          accept="image/*,video/*"
+                          onChange={handleMessageFileSelect}
+                          className="hidden"
+                        />
+                      </div>
                     </div>
                   </>
                 ) : (
@@ -1246,7 +1447,7 @@ export default function Community() {
                         <i className="fa-solid fa-comments text-indigo-400 text-2xl"></i>
                       </div>
                       <p className="font-bold text-slate-900 mb-1">Your Messages</p>
-                      <p className="text-slate-500 text-sm">Select a person to start chatting</p>
+                      <p className="text-slate-500 text-sm">Select a person or group to start chatting</p>
                     </div>
                   </div>
                 )}
@@ -1264,7 +1465,7 @@ export default function Community() {
       )}
       {viewingGroup && (
         <GroupDetailModal group={viewingGroup} allUsers={allUsers} currentUserId={currentUser.uid}
-          onClose={() => setViewingGroup(null)} onAddMember={handleAddMember} onLeave={handleLeaveGroup} />
+          onClose={() => setViewingGroup(null)} onAddMember={handleAddMember} onLeave={handleLeaveGroup} onMessage={openGroupChat} />
       )}
     </main>
   );
