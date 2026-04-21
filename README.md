@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+:
 
-## Getting Started
+🚀 AmTechy – AI-Powered Tech Learning Platform
 
-First, run the development server:
+AmTechy is an AI-powered platform designed to help users discover, learn, and grow in tech. Whether you're a beginner or exploring new career paths, AmTechy guides you with personalized recommendations, curated courses, and interactive learning tools.
 
-```bash
+🌍 Live Demo
+
+👉 https://am-techy.vercel.app
+
+✨ Features
+🤖 AI Career Guide
+Get personalized suggestions on what tech skill fits you best based on your interests.
+📚 Curated Learning Paths
+Access structured courses in:
+Web Development
+Product Design
+Other tech skills
+🎥 Video-Based Learning
+Learn through embedded high-quality video tutorials.
+💬 AI Assistant
+Ask questions and get instant explanations while learning.
+🧑‍🏫 1-on-1 Tutoring (Planned / Optional)
+Connect with tutors for personalized guidance.
+🏆 Certificates
+Earn certificates after completing courses.
+🌐 Community (Planned / Optional)
+Connect with other learners on the platform.
+🧠 Problem AmTechy Solves
+
+Many beginners:
+
+Don’t know which tech skill to choose
+Feel overwhelmed by too many resources
+Lack guidance and structure
+
+👉 AmTechy solves this by combining AI + structured learning + guidance in one place.
+
+🛠️ Tech Stack
+Frontend: Next.js (App Router)
+Styling: Tailwind CSS
+Backend / Auth / DB: Firebase
+Hosting: Vercel
+AI Integration: (your AI setup – OpenAI or other)
+⚙️ Getting Started
+1. Clone the repository
+git clone https://github.com/your-username/amtechy.git
+cd amtechy
+2. Install dependencies
+npm install
+3. Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+4. Open in browser
+http://localhost:3000
+🔐 Environment Variables
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Create a .env.local file and add:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+NEXT_PUBLIC_FIREBASE_API_KEY=your_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_domain
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_bucket
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+📈 Future Improvements
+Remove login barrier (instant AI access like ChatGPT)
+Better SEO for organic traffic
+Custom video hosting instead of only YouTube
+Mobile app version (FlutterFlow or React Native)
+Advanced AI learning assistant
+📢 Marketing Insight
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Users today prefer instant access (no login walls).
+Future updates will focus on giving users value immediately before asking them to sign up.
 
-## Learn More
+👨‍💻 Author
 
-To learn more about Next.js, take a look at the following resources:
+Ademola (Code with Faith)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+TikTok: Code with Faith
+Builder of AmTechy
+🤝 Contributing
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Contributions, ideas, and feedback are welcome!
+Feel free to fork the repo and submit a pull request.
 
-## Deploy on Vercel
+📄 License
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This project is open-source and available under the MIT License.
