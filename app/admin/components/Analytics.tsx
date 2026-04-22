@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useRef } from "react";
 import { db } from "@/lib/firebase";
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
 
 interface AnalyticsData {
   userGrowth: { date: string; count: number }[];
   revenue: { month: string; amount: number }[];
-  topTutors: { name: string; sessions: number; earnings: number }[];
+  topTutors: { id: string; name: string; sessions: number; earnings: number }[];
   topSubjects: { subject: string; bookings: number }[];
   platformStats: {
     totalRevenue: number;
@@ -82,6 +82,8 @@ function Counter({ value, prefix = "", suffix = "", decimals = 0 }: { value: num
 // ── Donut chart ──────────────────────────────────────────────────────────────
 function DonutChart({ slices }: { slices: { value: number; color: string; label: string }[] }) {
   const total = slices.reduce((s, d) => s + d.value, 0);
+  if (total === 0) return null;
+  
   let cumulative = 0;
   const r = 60;
   const cx = 70;
@@ -114,7 +116,7 @@ function ColumnChart({ data, color }: { data: { label: string; value: number }[]
     <div className="flex items-end gap-1.5 h-32 w-full">
       {data.map((d, i) => (
         <div key={i} className="flex flex-col items-center flex-1 gap-1 h-full justify-end">
-          <span className="text-[9px] text-slate-400 font-medium">{d.value}</span>
+          <span className="text-[9px] text-slate-400 font-medium">${d.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
           <div
             className="w-full rounded-t-sm transition-all duration-700"
             style={{
@@ -157,14 +159,14 @@ export default function Analytics() {
     try {
       const [usersSnapshot, bookingsSnapshot, tutorsSnapshot] = await Promise.all([
         getDocs(collection(db, "users")),
-        getDocs(collection(db, "bookings")),
+        getDocs(collection(db, "tutor_sessions")),
         getDocs(collection(db, "tutor_profiles")),
       ]);
 
       // User growth
       const usersByDate: { [key: string]: number } = {};
       usersSnapshot.forEach((doc) => {
-        const date = doc.data().createdAt?.toDate();
+        const date = doc.data().createdAt?.toDate?.();
         if (date) {
           const key = date.toISOString().split("T")[0];
           usersByDate[key] = (usersByDate[key] || 0) + 1;
@@ -175,21 +177,25 @@ export default function Analytics() {
         .map(([date, count]) => ({ date, count }))
         .slice(-30);
 
-      // Revenue
+      // Revenue and sessions
       const revenueByMonth: { [key: string]: number } = {};
       let totalRevenue = 0;
       let completedBookings = 0;
+      
       bookingsSnapshot.forEach((doc) => {
         const data = doc.data();
         if (data.status === "completed" && data.createdAt) {
-          const amount = data.amount || 0;
+          const amount = data.price || data.amount || 0;
           totalRevenue += amount;
           completedBookings++;
-          const date = data.createdAt.toDate();
-          const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-          revenueByMonth[key] = (revenueByMonth[key] || 0) + amount;
+          const dateObj = data.createdAt.toDate?.();
+          if (dateObj) {
+            const key = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, "0")}`;
+            revenueByMonth[key] = (revenueByMonth[key] || 0) + amount;
+          }
         }
       });
+      
       const revenue = Object.entries(revenueByMonth)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([month, amount]) => ({ month, amount }))
@@ -200,28 +206,37 @@ export default function Analytics() {
       const averageSessionPrice = completedBookings > 0 ? totalRevenue / completedBookings : 0;
 
       // Top tutors
-      const tutorStats: { [key: string]: { name: string; sessions: number; earnings: number } } = {};
+      const tutorStats: { [key: string]: { id: string; name: string; sessions: number; earnings: number } } = {};
       tutorsSnapshot.forEach((doc) => {
         const data = doc.data();
-        tutorStats[doc.id] = { name: data.displayName || "Unknown", sessions: 0, earnings: 0 };
+        tutorStats[doc.id] = { 
+          id: doc.id,
+          name: data.displayName || data.name || "Unknown", 
+          sessions: 0, 
+          earnings: 0 
+        };
       });
+      
       bookingsSnapshot.forEach((doc) => {
         const data = doc.data();
         if (data.tutorId && tutorStats[data.tutorId] && data.status === "completed") {
           tutorStats[data.tutorId].sessions++;
-          tutorStats[data.tutorId].earnings += (data.amount || 0) * 0.85;
+          tutorStats[data.tutorId].earnings += (data.price || data.amount || 0) * 0.85;
         }
       });
+      
       const topTutors = Object.values(tutorStats)
+        .filter(t => t.sessions > 0)
         .sort((a, b) => b.earnings - a.earnings)
         .slice(0, 8);
 
       // Top subjects
       const subjectStats: { [key: string]: number } = {};
       bookingsSnapshot.forEach((doc) => {
-        const topic = doc.data().topic;
-        if (topic) subjectStats[topic] = (subjectStats[topic] || 0) + 1;
+        const subject = doc.data().subject || doc.data().topic || doc.data().subject;
+        if (subject) subjectStats[subject] = (subjectStats[subject] || 0) + 1;
       });
+      
       const topSubjects = Object.entries(subjectStats)
         .map(([subject, bookings]) => ({ subject, bookings }))
         .sort((a, b) => b.bookings - a.bookings)
@@ -243,6 +258,7 @@ export default function Analytics() {
       });
     } catch (error) {
       console.error("Error fetching analytics:", error);
+      alert("Failed to load analytics data");
     } finally {
       setLoading(false);
     }
@@ -268,7 +284,7 @@ export default function Analytics() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Analytics & Reports</h2>
           <p className="text-slate-500 text-sm mt-0.5">Platform performance at a glance</p>
@@ -350,7 +366,7 @@ export default function Analytics() {
               <Counter value={card.value} prefix={card.prefix} decimals={card.decimals || 0} />
             </p>
             <div className="h-10">
-              <Sparkline data={card.spark} color={card.sparkColor} height={40} />
+              {card.spark.length > 0 && <Sparkline data={card.spark} color={card.sparkColor} height={40} />}
             </div>
           </div>
         ))}
@@ -359,7 +375,7 @@ export default function Analytics() {
       {/* Secondary stats row */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex items-center gap-4">
-          <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
+          <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center flex-shrink-0">
             <i className="fa-solid fa-calendar-check text-blue-600 text-lg" />
           </div>
           <div>
@@ -370,7 +386,7 @@ export default function Analytics() {
           </div>
         </div>
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5 flex items-center gap-4">
-          <div className="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center">
+          <div className="w-12 h-12 bg-rose-50 rounded-xl flex items-center justify-center flex-shrink-0">
             <i className="fa-solid fa-users text-rose-500 text-lg" />
           </div>
           <div>
@@ -416,18 +432,24 @@ export default function Analytics() {
             <p className="text-xs text-slate-400 mt-0.5">Platform vs Tutors</p>
           </div>
           <div className="flex flex-col items-center gap-4 flex-1 justify-center">
-            <DonutChart slices={donutSlices} />
-            <div className="space-y-2 w-full">
-              {donutSlices.map((s, i) => (
-                <div key={i} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: s.color }} />
-                    <span className="text-slate-600">{s.label}</span>
-                  </div>
-                  <span className="font-bold text-slate-900">${s.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+            {analytics.platformStats.totalRevenue > 0 ? (
+              <>
+                <DonutChart slices={donutSlices} />
+                <div className="space-y-2 w-full">
+                  {donutSlices.map((s, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: s.color }} />
+                        <span className="text-slate-600">{s.label}</span>
+                      </div>
+                      <span className="font-bold text-slate-900">${s.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-32 text-slate-400 text-sm">No revenue data yet</div>
+            )}
           </div>
         </div>
       </div>
@@ -476,7 +498,7 @@ export default function Analytics() {
           <div className="space-y-2.5">
             {analytics.topTutors.length > 0 ? (
               analytics.topTutors.slice(0, 6).map((tutor, i) => (
-                <div key={i} className="flex items-center gap-3 group">
+                <div key={tutor.id} className="flex items-center gap-3 group">
                   <div
                     className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-black flex-shrink-0"
                     style={{
@@ -514,7 +536,7 @@ export default function Analytics() {
                 const pct = (s.bookings / maxSubjects) * 100;
                 const colors = ["#6366f1", "#8b5cf6", "#a78bfa", "#c4b5fd", "#ddd6fe", "#ede9fe"];
                 return (
-                  <div key={i} className="space-y-1">
+                  <div key={s.subject} className="space-y-1">
                     <div className="flex items-center justify-between text-[12px]">
                       <span className="font-semibold text-slate-700 truncate max-w-[70%]">{s.subject}</span>
                       <span className="text-slate-400 font-medium">{s.bookings}</span>

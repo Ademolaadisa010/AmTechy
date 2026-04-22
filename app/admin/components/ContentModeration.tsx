@@ -21,7 +21,8 @@ interface FlaggedPost {
   userName: string;
   userAvatar?: string;
   content: string;
-  image?: string;
+  mediaUrl?: string;
+  mediaType?: "image" | "video";
   likes: string[];
   comments: any[];
   createdAt: any;
@@ -62,7 +63,8 @@ export default function ContentModeration({ onUpdate }: ContentModerationProps) 
         userName: doc.data().userName,
         userAvatar: doc.data().userAvatar,
         content: doc.data().content,
-        image: doc.data().image,
+        mediaUrl: doc.data().mediaUrl,
+        mediaType: doc.data().mediaType,
         likes: doc.data().likes || [],
         comments: doc.data().comments || [],
         createdAt: doc.data().createdAt,
@@ -125,6 +127,26 @@ export default function ContentModeration({ onUpdate }: ContentModerationProps) 
     }
   };
 
+  const handleWarnUser = async (userId: string, userName: string) => {
+    const reason = prompt(`Send warning to ${userName}. Reason (optional):`);
+    if (reason === null) return;
+
+    setProcessing(true);
+    try {
+      // Add warning to user's document
+      await updateDoc(doc(db, "users", userId), {
+        warnings: (await getDocs(query(collection(db, "users")))).docs[0].data().warnings || 0 + 1,
+        lastWarning: serverTimestamp(),
+      });
+      alert("User warning sent successfully!");
+    } catch (error) {
+      console.error("Error warning user:", error);
+      alert("Failed to warn user.");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -163,12 +185,12 @@ export default function ContentModeration({ onUpdate }: ContentModerationProps) 
             >
               <div className="flex items-start gap-4">
                 {/* User Info */}
-                <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
+                <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 overflow-hidden">
                   {post.userAvatar ? (
                     <img
                       src={post.userAvatar}
                       alt={post.userName}
-                      className="w-full h-full rounded-full object-cover"
+                      className="w-full h-full object-cover"
                     />
                   ) : (
                     post.userName.charAt(0).toUpperCase()
@@ -181,7 +203,7 @@ export default function ContentModeration({ onUpdate }: ContentModerationProps) 
                     <div>
                       <p className="font-semibold text-slate-900">{post.userName}</p>
                       <p className="text-xs text-slate-500">
-                        {post.createdAt?.toDate?.()?.toLocaleString()}
+                        {post.createdAt?.toDate?.()?.toLocaleString() || "Date unknown"}
                       </p>
                     </div>
                     <span className="px-3 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded-full flex items-center gap-1">
@@ -210,10 +232,17 @@ export default function ContentModeration({ onUpdate }: ContentModerationProps) 
                   {/* Content */}
                   <div className="bg-slate-50 rounded-lg p-4 mb-3">
                     <p className="text-slate-900 whitespace-pre-wrap">{post.content}</p>
-                    {post.image && (
+                    {post.mediaUrl && post.mediaType === "image" && (
                       <img
-                        src={post.image}
+                        src={post.mediaUrl}
                         alt="Post content"
+                        className="mt-3 rounded-lg max-w-md w-full"
+                      />
+                    )}
+                    {post.mediaUrl && post.mediaType === "video" && (
+                      <video
+                        src={post.mediaUrl}
+                        controls
                         className="mt-3 rounded-lg max-w-md w-full"
                       />
                     )}
@@ -232,7 +261,7 @@ export default function ContentModeration({ onUpdate }: ContentModerationProps) 
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-3">
+                  <div className="flex gap-3 flex-wrap">
                     <button
                       onClick={() => {
                         setSelectedPost(post);
@@ -242,6 +271,14 @@ export default function ContentModeration({ onUpdate }: ContentModerationProps) 
                     >
                       <i className="fa-solid fa-eye mr-2"></i>
                       Review
+                    </button>
+                    <button
+                      onClick={() => handleWarnUser(post.userId, post.userName)}
+                      disabled={processing}
+                      className="px-4 py-2 bg-yellow-600 text-white rounded-lg text-sm font-medium hover:bg-yellow-700 disabled:opacity-50 transition-colors"
+                    >
+                      <i className="fa-solid fa-exclamation-triangle mr-2"></i>
+                      Warn User
                     </button>
                     <button
                       onClick={() => handleUnflagPost(post.id)}
@@ -275,8 +312,8 @@ export default function ContentModeration({ onUpdate }: ContentModerationProps) 
 
       {/* Review Modal */}
       {showModal && selectedPost && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto my-4">
             <div className="sticky top-0 bg-white border-b border-slate-200 p-6 z-10">
               <div className="flex items-center justify-between">
                 <h3 className="text-xl font-bold text-slate-900">Review Flagged Content</h3>
@@ -292,12 +329,12 @@ export default function ContentModeration({ onUpdate }: ContentModerationProps) 
             <div className="p-6 space-y-6">
               {/* User Info */}
               <div className="flex items-center gap-4 pb-6 border-b border-slate-200">
-                <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-2xl">
+                <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-2xl overflow-hidden">
                   {selectedPost.userAvatar ? (
                     <img
                       src={selectedPost.userAvatar}
                       alt={selectedPost.userName}
-                      className="w-full h-full rounded-full object-cover"
+                      className="w-full h-full object-cover"
                     />
                   ) : (
                     selectedPost.userName.charAt(0).toUpperCase()
@@ -306,7 +343,7 @@ export default function ContentModeration({ onUpdate }: ContentModerationProps) 
                 <div>
                   <h4 className="text-lg font-bold text-slate-900">{selectedPost.userName}</h4>
                   <p className="text-sm text-slate-600">
-                    Posted {selectedPost.createdAt?.toDate?.()?.toLocaleString()}
+                    Posted {selectedPost.createdAt?.toDate?.()?.toLocaleString() || "Date unknown"}
                   </p>
                   <span className="mt-2 inline-block px-3 py-1 bg-red-100 text-red-700 text-xs font-semibold rounded-full">
                     {selectedPost.flagCount} {selectedPost.flagCount === 1 ? "flag" : "flags"}
@@ -318,14 +355,18 @@ export default function ContentModeration({ onUpdate }: ContentModerationProps) 
               <div>
                 <h5 className="font-semibold text-slate-900 mb-3">Flag Reasons:</h5>
                 <div className="flex flex-wrap gap-2">
-                  {selectedPost.flagReasons.map((reason, i) => (
-                    <span
-                      key={i}
-                      className="px-3 py-1 bg-red-50 text-red-700 rounded-lg text-sm font-medium"
-                    >
-                      {reason}
-                    </span>
-                  ))}
+                  {selectedPost.flagReasons.length > 0 ? (
+                    selectedPost.flagReasons.map((reason, i) => (
+                      <span
+                        key={i}
+                        className="px-3 py-1 bg-red-50 text-red-700 rounded-lg text-sm font-medium"
+                      >
+                        {reason}
+                      </span>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-500">No specific reasons provided</p>
+                  )}
                 </div>
               </div>
 
@@ -334,10 +375,17 @@ export default function ContentModeration({ onUpdate }: ContentModerationProps) 
                 <h5 className="font-semibold text-slate-900 mb-3">Content:</h5>
                 <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
                   <p className="text-slate-900 whitespace-pre-wrap">{selectedPost.content}</p>
-                  {selectedPost.image && (
+                  {selectedPost.mediaUrl && selectedPost.mediaType === "image" && (
                     <img
-                      src={selectedPost.image}
+                      src={selectedPost.mediaUrl}
                       alt="Post content"
+                      className="mt-4 rounded-lg max-w-full"
+                    />
+                  )}
+                  {selectedPost.mediaUrl && selectedPost.mediaType === "video" && (
+                    <video
+                      src={selectedPost.mediaUrl}
+                      controls
                       className="mt-4 rounded-lg max-w-full"
                     />
                   )}
@@ -357,11 +405,28 @@ export default function ContentModeration({ onUpdate }: ContentModerationProps) 
               </div>
 
               {/* Actions */}
-              <div className="flex gap-3 pt-4 border-t border-slate-200">
+              <div className="flex gap-3 pt-4 border-t border-slate-200 flex-wrap">
+                <button
+                  onClick={() => handleWarnUser(selectedPost.userId, selectedPost.userName)}
+                  disabled={processing}
+                  className="flex-1 min-w-[120px] py-3 bg-yellow-600 text-white rounded-lg font-medium hover:bg-yellow-700 disabled:opacity-50 transition-colors"
+                >
+                  {processing ? (
+                    <>
+                      <i className="fa-solid fa-spinner fa-spin mr-2"></i>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fa-solid fa-exclamation-triangle mr-2"></i>
+                      Warn User
+                    </>
+                  )}
+                </button>
                 <button
                   onClick={() => handleUnflagPost(selectedPost.id)}
                   disabled={processing}
-                  className="flex-1 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
+                  className="flex-1 min-w-[120px] py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
                 >
                   {processing ? (
                     <>
@@ -378,7 +443,7 @@ export default function ContentModeration({ onUpdate }: ContentModerationProps) 
                 <button
                   onClick={() => handleDeletePost(selectedPost.id)}
                   disabled={processing}
-                  className="flex-1 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                  className="flex-1 min-w-[120px] py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
                 >
                   {processing ? (
                     <>

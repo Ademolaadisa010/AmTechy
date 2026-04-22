@@ -28,14 +28,37 @@ interface Certificate {
   credentialUrl?: string;
 }
 
+interface CourseProgress {
+  courseId: string;
+  courseName: string;
+  completionPercentage: number;
+  lastAccessed: Date;
+  status: "in-progress" | "completed" | "not-started";
+}
+
+interface UserData {
+  uid: string;
+  displayName: string;
+  email: string;
+  isPremium?: boolean;
+  subscriptionStatus?: string;
+}
+
 export default function Certificates() {
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
+  const [courseProgress, setCourseProgress] = useState<CourseProgress[]>([]);
   const [selectedCertificate, setSelectedCertificate] = useState<Certificate | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<CourseProgress | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [showRequestModal, setShowRequestModal] = useState(false);
   const [filterCategory, setFilterCategory] = useState("all");
+
+  const WHATSAPP_NUMBER = "2349058704410";
+  const WHATSAPP_MESSAGE_TEMPLATE = (name: string, courseName: string, percentage: number) => 
+    `Hello! I have completed ${percentage}% of the ${courseName} course and would like to request my certificate. My name is ${name}.`;
 
   const categories = [
     { id: "all", label: "All Certificates" },
@@ -50,12 +73,21 @@ export default function Certificates() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        const userData = userDoc.data();
+        
         setUser({
           uid: currentUser.uid,
-          displayName: userDoc.data()?.name || currentUser.displayName || "User",
-          email: currentUser.email,
+          displayName: userData?.fullName || userData?.displayName || currentUser.displayName || "User",
+          email: currentUser.email || "",
+          isPremium: userData?.isPremium || false,
+          subscriptionStatus: userData?.subscriptionStatus,
         });
-        await fetchCertificates(currentUser.uid);
+
+        // Check if premium before fetching data
+        if (userData?.isPremium) {
+          await fetchCertificates(currentUser.uid);
+          await fetchCourseProgress(currentUser.uid);
+        }
         setLoading(false);
       } else {
         router.push("/login");
@@ -86,7 +118,6 @@ export default function Certificates() {
         credentialUrl: doc.data().credentialUrl,
       }));
 
-      // Add mock certificates if none exist
       if (certificatesData.length === 0) {
         const mockCertificates: Certificate[] = [
           {
@@ -95,32 +126,10 @@ export default function Certificates() {
             courseName: "Complete React Masterclass",
             completionDate: new Date(2024, 0, 15),
             certificateNumber: "CERT-2024-001-RCT",
-            instructor: "Sarah Johnson",
+            instructor: "AmTechy Admin",
             category: "frontend",
             skills: ["React", "Hooks", "Redux", "TypeScript"],
             issueDate: new Date(2024, 0, 15),
-          },
-          {
-            id: "2",
-            courseTitle: "Python for Data Science",
-            courseName: "Data Science Bootcamp",
-            completionDate: new Date(2024, 1, 20),
-            certificateNumber: "CERT-2024-002-PDS",
-            instructor: "Michael Chen",
-            category: "data-science",
-            skills: ["Python", "Pandas", "NumPy", "Machine Learning"],
-            issueDate: new Date(2024, 1, 20),
-          },
-          {
-            id: "3",
-            courseTitle: "UI/UX Design Fundamentals",
-            courseName: "Complete Design Course",
-            completionDate: new Date(2024, 2, 10),
-            certificateNumber: "CERT-2024-003-UIX",
-            instructor: "Emily Rodriguez",
-            category: "design",
-            skills: ["Figma", "User Research", "Prototyping", "Design Systems"],
-            issueDate: new Date(2024, 2, 10),
           },
         ];
         setCertificates(mockCertificates);
@@ -132,27 +141,201 @@ export default function Certificates() {
     }
   };
 
+  const fetchCourseProgress = async (userId: string) => {
+    try {
+      const progressQuery = query(
+        collection(db, "progress"),
+        where("userId", "==", userId)
+      );
+      const snapshot = await getDocs(progressQuery);
+
+      const progressData: CourseProgress[] = snapshot.docs.map((doc) => ({
+        courseId: doc.data().courseId || "",
+        courseName: doc.data().courseName || "Unknown Course",
+        completionPercentage: doc.data().progress || 0,
+        lastAccessed: doc.data().lastAccessed?.toDate() || new Date(),
+        status: doc.data().completionPercentage === 100 ? "completed" : "in-progress",
+      }));
+
+      if (progressData.length === 0) {
+        const mockProgress: CourseProgress[] = [
+          {
+            courseId: "1",
+            courseName: "Complete React Masterclass",
+            completionPercentage: 100,
+            lastAccessed: new Date(),
+            status: "completed",
+          },
+          {
+            courseId: "2",
+            courseName: "Advanced TypeScript",
+            completionPercentage: 65,
+            lastAccessed: new Date(),
+            status: "in-progress",
+          },
+          {
+            courseId: "3",
+            courseName: "Next.js 14 Mastery",
+            completionPercentage: 45,
+            lastAccessed: new Date(),
+            status: "in-progress",
+          },
+        ];
+        setCourseProgress(mockProgress);
+      } else {
+        setCourseProgress(progressData);
+      }
+    } catch (error) {
+      console.error("Error fetching course progress:", error);
+    }
+  };
+
+  const handleRequestCertificate = (course: CourseProgress) => {
+    if (course.completionPercentage < 100) {
+      alert(`You must complete 100% of the course. You are currently at ${course.completionPercentage}% completion.`);
+      return;
+    }
+
+    setSelectedCourse(course);
+    setShowRequestModal(true);
+  };
+
+  const sendWhatsAppMessage = (course: CourseProgress) => {
+    const message = WHATSAPP_MESSAGE_TEMPLATE(user?.displayName || "User", course.courseName, course.completionPercentage);
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappURL = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodedMessage}`;
+    window.open(whatsappURL, "_blank");
+    setShowRequestModal(false);
+  };
+
   const filteredCertificates = filterCategory === "all"
     ? certificates
     : certificates.filter((cert) => cert.category === filterCategory);
 
-  const handleDownload = (certificate: Certificate) => {
-    // In production, this would generate a PDF
-    alert(`Downloading certificate: ${certificate.courseTitle}`);
-  };
+  // Premium Modal Component
+  const PremiumModal = () => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
+        <button
+          onClick={() => router.push("/dashboard")}
+          className="absolute top-4 right-4 w-8 h-8 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center"
+        >
+          <i className="fa-solid fa-xmark text-slate-600"></i>
+        </button>
 
-  const handleShare = (certificate: Certificate) => {
-    if (navigator.share) {
-      navigator.share({
-        title: `${certificate.courseTitle} Certificate`,
-        text: `I just completed ${certificate.courseTitle}!`,
-        url: window.location.href,
-      });
-    } else {
-      alert("Share functionality not supported on this device");
-    }
-  };
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i className="fa-solid fa-crown text-white text-2xl"></i>
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Premium Only</h2>
+          <p className="text-slate-600">Certificates are an exclusive Premium feature</p>
+        </div>
 
+        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-6 mb-6 border border-indigo-100">
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <i className="fa-solid fa-check text-white text-sm"></i>
+              </div>
+              <span className="text-sm font-medium text-slate-700">View all certificates</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <i className="fa-solid fa-check text-white text-sm"></i>
+              </div>
+              <span className="text-sm font-medium text-slate-700">Track course progress</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <i className="fa-solid fa-check text-white text-sm"></i>
+              </div>
+              <span className="text-sm font-medium text-slate-700">Request certificates</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <i className="fa-solid fa-check text-white text-sm"></i>
+              </div>
+              <span className="text-sm font-medium text-slate-700">Download & share certificates</span>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={() => router.push("/pricing")}
+          className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-xl hover:shadow-lg transition-all mb-3"
+        >
+          Upgrade to Premium
+        </button>
+        <button
+          onClick={() => router.push("/dashboard")}
+          className="w-full py-2 bg-slate-100 text-slate-700 font-medium rounded-xl hover:bg-slate-200 transition-colors"
+        >
+          Back to Home
+        </button>
+      </div>
+    </div>
+  );
+
+  // Certificate Request Modal
+  const CertificateRequestModal = ({ course }: { course: CourseProgress }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
+        <button
+          onClick={() => setShowRequestModal(false)}
+          className="absolute top-4 right-4 w-8 h-8 bg-slate-100 hover:bg-slate-200 rounded-full flex items-center justify-center"
+        >
+          <i className="fa-solid fa-xmark text-slate-600"></i>
+        </button>
+
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i className="fa-solid fa-certificate text-white text-2xl"></i>
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Request Certificate</h2>
+          <p className="text-slate-600">You've completed {course.completionPercentage}% of {course.courseName}</p>
+        </div>
+
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6">
+          <div className="flex items-center gap-3">
+            <i className="fa-solid fa-circle-check text-green-600 text-xl"></i>
+            <div>
+              <p className="font-semibold text-green-900">Ready for Certificate</p>
+              <p className="text-sm text-green-700">You have completed all course requirements</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mb-6 bg-slate-50 rounded-xl p-4 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-slate-700">Your Name:</span>
+            <span className="text-sm text-slate-900 font-semibold">{user?.displayName}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-slate-700">Course:</span>
+            <span className="text-sm text-slate-900 font-semibold">{course.courseName}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-slate-700">Completion:</span>
+            <span className="text-sm text-green-600 font-semibold">100%</span>
+          </div>
+        </div>
+
+        <p className="text-sm text-slate-600 mb-6 text-center">
+          Click the button below to contact us via WhatsApp and request your certificate. Our team will review and process your request.
+        </p>
+
+        <button
+          onClick={() => sendWhatsAppMessage(course)}
+          className="w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-xl hover:shadow-lg transition-all flex items-center justify-center gap-2"
+        >
+          <i className="fa-brands fa-whatsapp text-xl"></i>
+          Request via WhatsApp
+        </button>
+      </div>
+    </div>
+  );
+
+  // Certificate Preview Modal
   const CertificatePreview = ({ certificate }: { certificate: Certificate }) => (
     <div className="bg-white rounded-lg shadow-2xl p-12 max-w-4xl w-full relative">
       <button
@@ -216,23 +399,6 @@ export default function Certificates() {
           </div>
         </div>
       </div>
-      <BottomBar/>
-      <div className="flex gap-4 mt-6">
-        <button
-          onClick={() => handleDownload(certificate)}
-          className="flex-1 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors"
-        >
-          <i className="fa-solid fa-download mr-2"></i>
-          Download PDF
-        </button>
-        <button
-          onClick={() => handleShare(certificate)}
-          className="flex-1 py-3 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors"
-        >
-          <i className="fa-solid fa-share-nodes mr-2"></i>
-          Share
-        </button>
-      </div>
     </div>
   );
 
@@ -244,6 +410,21 @@ export default function Certificates() {
     );
   }
 
+  // Not premium - show paywall
+  if (!user?.isPremium) {
+    return (
+      <main className="flex-1 flex bg-slate-50 min-w-0">
+        <SideBar />
+        <section className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-4xl mx-auto">
+            <PremiumModal />
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  // Premium user - show certificates
   return (
     <main className="flex-1 flex bg-slate-50 min-w-0">
       <SideBar />
@@ -251,9 +432,15 @@ export default function Certificates() {
       <section className="flex-1 overflow-y-auto p-6">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold text-slate-900">My Certificates</h1>
-            <p className="text-slate-600 mt-1">View and share your course completion certificates</p>
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-slate-900">My Certificates</h1>
+              <p className="text-slate-600 mt-1">View and request certificates for completed courses</p>
+            </div>
+            <div className="px-4 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-full text-sm font-bold flex items-center gap-2">
+              <i className="fa-solid fa-crown text-yellow-300"></i>
+              Premium
+            </div>
           </div>
 
           {/* Stats */}
@@ -265,7 +452,7 @@ export default function Certificates() {
                 </div>
                 <span className="text-3xl font-bold">{certificates.length}</span>
               </div>
-              <p className="text-sm opacity-90">Total Certificates</p>
+              <p className="text-sm opacity-90">Earned Certificates</p>
             </div>
 
             <div className="bg-gradient-to-br from-green-500 to-teal-600 rounded-xl shadow-sm p-6 text-white">
@@ -273,7 +460,9 @@ export default function Certificates() {
                 <div className="w-12 h-12 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
                   <i className="fa-solid fa-check-circle text-2xl"></i>
                 </div>
-                <span className="text-3xl font-bold">{certificates.length}</span>
+                <span className="text-3xl font-bold">
+                  {courseProgress.filter(c => c.completionPercentage === 100).length}
+                </span>
               </div>
               <p className="text-sm opacity-90">Courses Completed</p>
             </div>
@@ -281,164 +470,216 @@ export default function Certificates() {
             <div className="bg-gradient-to-br from-orange-500 to-red-600 rounded-xl shadow-sm p-6 text-white">
               <div className="flex items-center justify-between mb-2">
                 <div className="w-12 h-12 bg-white bg-opacity-20 rounded-lg flex items-center justify-center">
-                  <i className="fa-solid fa-award text-2xl"></i>
+                  <i className="fa-solid fa-book-open text-2xl"></i>
                 </div>
-                <span className="text-3xl font-bold">
-                  {new Set(certificates.map(c => c.category)).size}
-                </span>
+                <span className="text-3xl font-bold">{courseProgress.length}</span>
               </div>
-              <p className="text-sm opacity-90">Skill Categories</p>
+              <p className="text-sm opacity-90">Enrolled Courses</p>
             </div>
           </div>
 
-          {/* Filter */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6">
-            <div className="flex items-center gap-2 overflow-x-auto">
-              <span className="text-sm font-semibold text-slate-700 mr-2">Filter:</span>
-              {categories.map((category) => (
-                <button
-                  key={category.id}
-                  onClick={() => setFilterCategory(category.id)}
-                  className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
-                    filterCategory === category.id
-                      ? "bg-indigo-600 text-white shadow-md"
-                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                  }`}
-                >
-                  {category.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Certificates Grid */}
-          {filteredCertificates.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredCertificates.map((certificate) => (
-                <div
-                  key={certificate.id}
-                  className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-lg transition-all cursor-pointer group"
-                  onClick={() => {
-                    setSelectedCertificate(certificate);
-                    setShowPreview(true);
-                  }}
-                >
-                  {/* Certificate Preview */}
-                  <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-6 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-16 -mt-16"></div>
-                    <div className="absolute bottom-0 left-0 w-24 h-24 bg-white opacity-10 rounded-full -ml-12 -mb-12"></div>
-                    <div className="relative z-10">
-                      <i className="fa-solid fa-award text-white text-4xl mb-4"></i>
-                      <h3 className="text-white font-bold text-lg mb-2 line-clamp-2">
-                        {certificate.courseTitle}
-                      </h3>
-                      <p className="text-white text-sm opacity-90">
-                        {certificate.completionDate.toLocaleDateString("en-US", {
-                          month: "long",
-                          year: "numeric",
-                        })}
+          {/* Course Progress Section */}
+          <div className="mb-8">
+            <h2 className="text-2xl font-bold text-slate-900 mb-4">Course Progress</h2>
+            <div className="space-y-3">
+              {courseProgress.map((course) => (
+                <div key={course.courseId} className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex-1">
+                      <h3 className="font-bold text-slate-900">{course.courseName}</h3>
+                      <p className="text-sm text-slate-500 mt-1">
+                        Last accessed: {course.lastAccessed.toLocaleDateString()}
                       </p>
                     </div>
+                    <div className="text-right">
+                      <span className={`text-2xl font-bold ${
+                        course.completionPercentage === 100 ? "text-green-600" : "text-indigo-600"
+                      }`}>
+                        {course.completionPercentage}%
+                      </span>
+                    </div>
                   </div>
 
-                  {/* Certificate Details */}
-                  <div className="p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-full">
-                        {certificate.category}
-                      </span>
-                      <span className="text-xs text-slate-500">
-                        ID: {certificate.certificateNumber}
-                      </span>
-                    </div>
+                  {/* Progress bar */}
+                  <div className="w-full bg-slate-200 rounded-full h-3 mb-3 overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-500 ${
+                        course.completionPercentage === 100
+                          ? "bg-gradient-to-r from-green-500 to-emerald-600"
+                          : "bg-gradient-to-r from-indigo-600 to-purple-600"
+                      }`}
+                      style={{ width: `${course.completionPercentage}%` }}
+                    />
+                  </div>
 
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {certificate.skills.slice(0, 3).map((skill, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded"
-                        >
-                          {skill}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-600">
+                      {course.completionPercentage === 100 ? (
+                        <span className="flex items-center gap-1 text-green-600 font-medium">
+                          <i className="fa-solid fa-check-circle"></i>
+                          Completed
                         </span>
-                      ))}
-                      {certificate.skills.length > 3 && (
-                        <span className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded">
-                          +{certificate.skills.length - 3}
-                        </span>
+                      ) : (
+                        `${100 - course.completionPercentage}% remaining`
                       )}
-                    </div>
-
-                    <div className="flex gap-2">
+                    </span>
+                    {course.completionPercentage === 100 && (
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDownload(certificate);
-                        }}
-                        className="flex-1 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800 transition-colors"
+                        onClick={() => handleRequestCertificate(course)}
+                        className="px-4 py-2 bg-green-600 text-white text-sm font-bold rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
                       >
-                        <i className="fa-solid fa-download mr-2"></i>
-                        Download
+                        <i className="fa-brands fa-whatsapp"></i>
+                        Request Certificate
                       </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleShare(certificate);
-                        }}
-                        className="px-4 py-2 bg-slate-100 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-200 transition-colors"
-                      >
-                        <i className="fa-solid fa-share-nodes"></i>
-                      </button>
-                    </div>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
-              <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <i className="fa-solid fa-certificate text-slate-400 text-3xl"></i>
-              </div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">No Certificates Yet</h3>
-              <p className="text-slate-600 mb-6">
-                Complete courses to earn certificates and showcase your skills
-              </p>
-              <button
-                onClick={() => router.push("/courses")}
-                className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors"
-              >
-                Browse Courses
-              </button>
-            </div>
-          )}
+          </div>
 
-          {/* Verification Info */}
+          {/* Earned Certificates Section */}
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900 mb-4">Earned Certificates</h2>
+            
+            {/* Filter */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-6">
+              <div className="flex items-center gap-2 overflow-x-auto">
+                <span className="text-sm font-semibold text-slate-700 mr-2">Filter:</span>
+                {categories.map((category) => (
+                  <button
+                    key={category.id}
+                    onClick={() => setFilterCategory(category.id)}
+                    className={`px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+                      filterCategory === category.id
+                        ? "bg-indigo-600 text-white shadow-md"
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    }`}
+                  >
+                    {category.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Certificates Grid */}
+            {filteredCertificates.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredCertificates.map((certificate) => (
+                  <div
+                    key={certificate.id}
+                    className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-lg transition-all cursor-pointer group"
+                    onClick={() => {
+                      setSelectedCertificate(certificate);
+                      setShowPreview(true);
+                    }}
+                  >
+                    {/* Certificate Preview */}
+                    <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-6 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full -mr-16 -mt-16"></div>
+                      <div className="absolute bottom-0 left-0 w-24 h-24 bg-white opacity-10 rounded-full -ml-12 -mb-12"></div>
+                      <div className="relative z-10">
+                        <i className="fa-solid fa-award text-white text-4xl mb-4"></i>
+                        <h3 className="text-white font-bold text-lg mb-2 line-clamp-2">
+                          {certificate.courseTitle}
+                        </h3>
+                        <p className="text-white text-sm opacity-90">
+                          {certificate.completionDate.toLocaleDateString("en-US", {
+                            month: "long",
+                            year: "numeric",
+                          })}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Certificate Details */}
+                    <div className="p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-full">
+                          {certificate.category}
+                        </span>
+                        <span className="text-xs text-slate-500">
+                          ID: {certificate.certificateNumber}
+                        </span>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {certificate.skills.slice(0, 3).map((skill, idx) => (
+                          <span
+                            key={idx}
+                            className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded"
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                        {certificate.skills.length > 3 && (
+                          <span className="px-2 py-1 bg-slate-100 text-slate-700 text-xs rounded">
+                            +{certificate.skills.length - 3}
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedCertificate(certificate);
+                          setShowPreview(true);
+                        }}
+                        className="w-full py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+                      >
+                        <i className="fa-solid fa-eye mr-2"></i>
+                        View Certificate
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
+                <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <i className="fa-solid fa-certificate text-slate-400 text-3xl"></i>
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 mb-2">No Certificates Yet</h3>
+                <p className="text-slate-600 mb-6">
+                  Complete a course to earn your first certificate!
+                </p>
+                <button
+                  onClick={() => router.push("/courses")}
+                  className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors"
+                >
+                  Browse Courses
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Info Banner */}
           <div className="mt-8 bg-blue-50 border border-blue-200 rounded-xl p-6">
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <i className="fa-solid fa-shield-check text-blue-600 text-xl"></i>
+                <i className="fa-solid fa-circle-info text-blue-600 text-xl"></i>
               </div>
               <div>
-                <h3 className="font-bold text-slate-900 mb-2">Verify Certificates</h3>
+                <h3 className="font-bold text-slate-900 mb-2">How Certificate Requests Work</h3>
                 <p className="text-sm text-slate-700 mb-3">
-                  All certificates can be verified using their unique certificate ID. Share your
-                  certificate with confidence knowing that employers can verify its authenticity.
+                  Once you complete 100% of a course, click "Request Certificate" to contact us via WhatsApp. 
+                  Our team will verify your completion and send your certificate within 24 hours.
                 </p>
-                <a
-                  href="#"
-                  className="text-sm font-medium text-blue-600 hover:text-blue-700"
-                >
-                  Learn more about certificate verification →
-                </a>
               </div>
             </div>
           </div>
         </div>
+        <BottomBar />
       </section>
 
       {showPreview && selectedCertificate && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
           <CertificatePreview certificate={selectedCertificate} />
         </div>
+      )}
+
+      {showRequestModal && selectedCourse && (
+        <CertificateRequestModal course={selectedCourse} />
       )}
     </main>
   );
