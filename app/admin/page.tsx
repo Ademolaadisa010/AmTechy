@@ -19,6 +19,7 @@ import ContentModeration from "./components/ContentModeration";
 import Analytics from "./components/Analytics";
 import BookingManagement from "./components/BookingManagement";
 import CourseManagement from "./components/CourseManagement";
+import PremiumManagement from "./components/PremiumManagement";
 
 interface AdminStats {
   totalUsers: number;
@@ -394,7 +395,8 @@ export default function AdminDashboard() {
         {activeTab === "applications" && <ApplicationReview onUpdate={refreshData} />}
         {activeTab === "bookings" && <BookingManagement onUpdate={refreshData} />}
         {activeTab === "content" && <ContentModeration onUpdate={refreshData} />}
-        {activeTab === "analytics" && <Analytics />}
+        {activeTab === "analytics" && <PremiumManagement />}
+        {/* {activeTab === "premium" && <PremiumManagement />} */}
       </main>
     </div>
   );

@@ -12,6 +12,7 @@ import {
   getDocs,
   doc,
   getDoc,
+  onSnapshot,
 } from "firebase/firestore";
 import BottomBar from "../bottom-bar/page";
 
@@ -40,7 +41,7 @@ interface UserData {
   uid: string;
   displayName: string;
   email: string;
-  isPremium?: boolean;
+  isPremium: boolean;
   subscriptionStatus?: string;
 }
 
@@ -69,28 +70,54 @@ export default function Certificates() {
     { id: "mobile", label: "Mobile Development" },
   ];
 
+  // ✅ FIXED: Use real-time listener for user data
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (currentUser) {
-        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-        const userData = userDoc.data();
+      if (!currentUser) {
+        router.push("/login");
+        return;
+      }
+
+      try {
+        // ✅ Use onSnapshot for real-time updates
+        const userDocRef = doc(db, "users", currentUser.uid);
         
-        setUser({
-          uid: currentUser.uid,
-          displayName: userData?.fullName || userData?.displayName || currentUser.displayName || "User",
-          email: currentUser.email || "",
-          isPremium: userData?.isPremium || false,
-          subscriptionStatus: userData?.subscriptionStatus,
+        const unsubscribeUser = onSnapshot(userDocRef, async (userDocSnap) => {
+          if (!userDocSnap.exists()) {
+            console.warn("User document not found");
+            setLoading(false);
+            return;
+          }
+
+          const userData = userDocSnap.data();
+
+          // ✅ Check multiple field names for backward compatibility
+          const isPremium = userData?.isPremium === true || userData?.plan === "premium";
+          const subscriptionStatus = userData?.subscriptionStatus || (isPremium ? "active" : "inactive");
+
+          setUser({
+            uid: currentUser.uid,
+            displayName: userData?.fullName || userData?.displayName || currentUser.displayName || "User",
+            email: currentUser.email || "",
+            isPremium: isPremium,
+            subscriptionStatus: subscriptionStatus,
+          });
+
+          // ✅ Always try to fetch data - let data layer handle filtering
+          if (isPremium) {
+            await Promise.all([
+              fetchCertificates(currentUser.uid),
+              fetchCourseProgress(currentUser.uid),
+            ]);
+          }
+
+          setLoading(false);
         });
 
-        // Check if premium before fetching data
-        if (userData?.isPremium) {
-          await fetchCertificates(currentUser.uid);
-          await fetchCourseProgress(currentUser.uid);
-        }
+        return () => unsubscribeUser();
+      } catch (error) {
+        console.error("Error setting up user listener:", error);
         setLoading(false);
-      } else {
-        router.push("/login");
       }
     });
 
@@ -109,12 +136,12 @@ export default function Certificates() {
         id: doc.id,
         courseTitle: doc.data().courseTitle || "",
         courseName: doc.data().courseName || "",
-        completionDate: doc.data().completionDate?.toDate() || new Date(),
+        completionDate: doc.data().completionDate?.toDate?.() || new Date(),
         certificateNumber: doc.data().certificateNumber || "",
         instructor: doc.data().instructor || "Instructor",
         category: doc.data().category || "General",
         skills: doc.data().skills || [],
-        issueDate: doc.data().issueDate?.toDate() || new Date(),
+        issueDate: doc.data().issueDate?.toDate?.() || new Date(),
         credentialUrl: doc.data().credentialUrl,
       }));
 
@@ -149,13 +176,16 @@ export default function Certificates() {
       );
       const snapshot = await getDocs(progressQuery);
 
-      const progressData: CourseProgress[] = snapshot.docs.map((doc) => ({
-        courseId: doc.data().courseId || "",
-        courseName: doc.data().courseName || "Unknown Course",
-        completionPercentage: doc.data().progress || 0,
-        lastAccessed: doc.data().lastAccessed?.toDate() || new Date(),
-        status: doc.data().completionPercentage === 100 ? "completed" : "in-progress",
-      }));
+      const progressData: CourseProgress[] = snapshot.docs.map((doc) => {
+        const progress = doc.data().progress || 0;
+        return {
+          courseId: doc.data().courseId || "",
+          courseName: doc.data().courseName || "Unknown Course",
+          completionPercentage: progress,
+          lastAccessed: doc.data().lastAccessed?.toDate?.() || new Date(),
+          status: progress === 100 ? "completed" : "in-progress",
+        };
+      });
 
       if (progressData.length === 0) {
         const mockProgress: CourseProgress[] = [
@@ -212,7 +242,7 @@ export default function Certificates() {
     ? certificates
     : certificates.filter((cert) => cert.category === filterCategory);
 
-  // Premium Modal Component
+  // ✅ PREMIUM MODAL COMPONENT
   const PremiumModal = () => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
@@ -233,30 +263,19 @@ export default function Certificates() {
 
         <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-6 mb-6 border border-indigo-100">
           <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
-                <i className="fa-solid fa-check text-white text-sm"></i>
+            {[
+              "View all certificates",
+              "Track course progress",
+              "Request certificates",
+              "Download & share certificates",
+            ].map((feature) => (
+              <div key={feature} className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
+                  <i className="fa-solid fa-check text-white text-sm"></i>
+                </div>
+                <span className="text-sm font-medium text-slate-700">{feature}</span>
               </div>
-              <span className="text-sm font-medium text-slate-700">View all certificates</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
-                <i className="fa-solid fa-check text-white text-sm"></i>
-              </div>
-              <span className="text-sm font-medium text-slate-700">Track course progress</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
-                <i className="fa-solid fa-check text-white text-sm"></i>
-              </div>
-              <span className="text-sm font-medium text-slate-700">Request certificates</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
-                <i className="fa-solid fa-check text-white text-sm"></i>
-              </div>
-              <span className="text-sm font-medium text-slate-700">Download & share certificates</span>
-            </div>
+            ))}
           </div>
         </div>
 
@@ -276,7 +295,7 @@ export default function Certificates() {
     </div>
   );
 
-  // Certificate Request Modal
+  // ✅ CERTIFICATE REQUEST MODAL COMPONENT
   const CertificateRequestModal = ({ course }: { course: CourseProgress }) => (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
@@ -335,7 +354,7 @@ export default function Certificates() {
     </div>
   );
 
-  // Certificate Preview Modal
+  // ✅ CERTIFICATE PREVIEW MODAL
   const CertificatePreview = ({ certificate }: { certificate: Certificate }) => (
     <div className="bg-white rounded-lg shadow-2xl p-12 max-w-4xl w-full relative">
       <button
@@ -345,7 +364,6 @@ export default function Certificates() {
         <i className="fa-solid fa-xmark text-slate-600"></i>
       </button>
 
-      {/* Certificate Design */}
       <div className="border-8 border-double border-indigo-600 p-8 relative">
         <div className="absolute top-0 left-0 w-32 h-32 border-t-4 border-l-4 border-indigo-600"></div>
         <div className="absolute top-0 right-0 w-32 h-32 border-t-4 border-r-4 border-indigo-600"></div>
@@ -410,8 +428,8 @@ export default function Certificates() {
     );
   }
 
-  // Not premium - show paywall
-  if (!user?.isPremium) {
+  // ✅ NOT PREMIUM - SHOW PAYWALL
+  if (!user || !user.isPremium) {
     return (
       <main className="flex-1 flex bg-slate-50 min-w-0">
         <SideBar />
@@ -424,7 +442,7 @@ export default function Certificates() {
     );
   }
 
-  // Premium user - show certificates
+  // ✅ PREMIUM USER - SHOW CERTIFICATES
   return (
     <main className="flex-1 flex bg-slate-50 min-w-0">
       <SideBar />
