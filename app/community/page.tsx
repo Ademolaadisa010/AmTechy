@@ -425,9 +425,9 @@ export default function Community() {
   const messageFileInputRef = useRef<HTMLInputElement>(null);
 
   const pendingRequests = friendRequests.filter((r) => r.toId === currentUser?.uid && r.status === "pending");
-  const friends = currentUser?.friends?.map((fid) => allUsers.find((u) => u.uid === fid)).filter(Boolean) as UserProfile[];
-  const filteredFriends = friends.filter((f) => f.displayName.toLowerCase().includes(friendSearch.toLowerCase()));
-  const nonFriends = allUsers.filter((u) => u.uid !== currentUser?.uid && !currentUser?.friends?.includes(u.uid));
+  const friends = (currentUser?.friends || []).map((fid) => allUsers.find((u) => u.uid === fid)).filter(Boolean) as UserProfile[];
+  const filteredFriends = (friends || []).filter((f) =>f.displayName.toLowerCase().includes(friendSearch.toLowerCase()));
+  const nonFriends = allUsers.filter((u) =>u.uid !== currentUser?.uid &&!(currentUser?.friends || []).includes(u.uid));
 
   // ✅ REAL-TIME LISTENER FOR POSTS
   useEffect(() => {
