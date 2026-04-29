@@ -190,7 +190,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Admin Profile */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-slate-200 bg-white">
+        {/* <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-slate-200 bg-white">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
               {admin?.displayName?.charAt(0) || "A"}
@@ -212,7 +212,7 @@ export default function AdminDashboard() {
             <i className="fa-solid fa-right-from-bracket mr-2"></i>
             Logout
           </button>
-        </div>
+        </div> */}
       </aside>
 
       {/* Main Content */}
