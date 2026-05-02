@@ -46,6 +46,8 @@ export default function JobsAndInternships() {
   const [userCareerGoal, setUserCareerGoal] = useState("");
   const [savedJobs, setSavedJobs] = useState<string[]>([]);
   const [currentUserId, setCurrentUserId] = useState("");
+  const [isPremium, setIsPremium] = useState(false);
+  const [notPremiumMessage, setNotPremiumMessage] = useState(false);
 
   const jobTypes = [
     { id: "all", label: "All Jobs", icon: "💼" },
@@ -75,6 +77,19 @@ export default function JobsAndInternships() {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setCurrentUserId(user.uid);
+        
+        // ✅ Check premium status first
+        const premiumStatus = await checkPremiumStatus(user.uid);
+        setIsPremium(premiumStatus);
+
+        if (!premiumStatus) {
+          // ✅ Not premium - show message and block access
+          setNotPremiumMessage(true);
+          setLoading(false);
+          return;
+        }
+
+        // ✅ Premium user - load jobs
         await Promise.all([
           fetchUserCareerGoal(user.uid),
           fetchSavedJobs(user.uid),
@@ -87,6 +102,22 @@ export default function JobsAndInternships() {
     });
     return () => unsubscribe();
   }, [router]);
+
+  // ✅ NEW: Check if user is premium
+  const checkPremiumStatus = async (userId: string): Promise<boolean> => {
+    try {
+      const userDoc = await getDoc(doc(db, "users", userId));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        // ✅ Check both isPremium and plan fields
+        return userData.isPremium === true || userData.plan === "premium";
+      }
+      return false;
+    } catch (error) {
+      console.error("Error checking premium status:", error);
+      return false;
+    }
+  };
 
   useEffect(() => {
     filterJobs();
@@ -221,6 +252,7 @@ export default function JobsAndInternships() {
 
   const recommendedJobs = getRecommendedJobs();
 
+  // ✅ Show loading
   if (loading) {
     return (
       <main className="flex-1 flex bg-slate-50 min-w-0 items-center justify-center">
@@ -228,6 +260,61 @@ export default function JobsAndInternships() {
           <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-slate-600">Loading opportunities…</p>
         </div>
+      </main>
+    );
+  }
+
+  // ✅ NEW: Show premium paywall if not premium
+  if (notPremiumMessage) {
+    return (
+      <main className="flex-1 flex bg-slate-50 min-w-0">
+        <SideBar />
+        <section className="flex-1 p-6 overflow-y-auto flex items-center justify-center">
+          <div className="max-w-md bg-white rounded-2xl border border-slate-200 p-8 text-center shadow-lg">
+            <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <i className="fa-solid fa-briefcase text-indigo-600 text-2xl"></i>
+            </div>
+            
+            <h2 className="text-2xl font-bold text-slate-900 mb-3">Premium Feature</h2>
+            
+            <p className="text-slate-600 mb-6">
+              Access to exclusive job opportunities and internships is available for premium members only.
+            </p>
+
+            <div className="bg-indigo-50 rounded-xl p-4 mb-6 space-y-2 text-left">
+              <div className="flex items-center gap-2 text-sm text-slate-700">
+                <i className="fa-solid fa-check text-green-600"></i>
+                <span>Browse 100+ job opportunities</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-700">
+                <i className="fa-solid fa-check text-green-600"></i>
+                <span>Apply directly to companies</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-700">
+                <i className="fa-solid fa-check text-green-600"></i>
+                <span>Save and track applications</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-slate-700">
+                <i className="fa-solid fa-check text-green-600"></i>
+                <span>Personalized job recommendations</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => router.push("/pricing")}
+              className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors mb-3"
+            >
+              Upgrade to Premium
+            </button>
+
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="w-full py-2 text-indigo-600 font-semibold hover:text-indigo-700 transition-colors"
+            >
+              Back to Dashboard
+            </button>
+          </div>
+        </section>
       </main>
     );
   }

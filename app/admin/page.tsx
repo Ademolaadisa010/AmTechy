@@ -20,6 +20,8 @@ import Analytics from "./components/Analytics";
 import BookingManagement from "./components/BookingManagement";
 import CourseManagement from "./components/CourseManagement";
 import PremiumManagement from "./components/PremiumManagement";
+import AnnouncementManagement from "./components/AnnouncementManagement";
+import JobsManagement from "./components/JobsManagement";
 
 interface AdminStats {
   totalUsers: number;
@@ -69,7 +71,6 @@ export default function AdminDashboard() {
 
   const loadDashboardData = async () => {
     try {
-      // Fetch all necessary data
       const [
         usersSnapshot,
         tutorsSnapshot,
@@ -86,7 +87,6 @@ export default function AdminDashboard() {
         getDocs(query(collection(db, "posts"), where("flagged", "==", true))),
       ]);
 
-      // Calculate revenue
       let totalRevenue = 0;
       let activeSessions = 0;
       bookingsSnapshot.forEach((doc) => {
@@ -110,7 +110,6 @@ export default function AdminDashboard() {
         flaggedContent: postsSnapshot.size,
       });
 
-      // Get recent activity
       const bookingsQuery = query(
         collection(db, "bookings"),
         orderBy("createdAt", "desc"),
@@ -163,8 +162,11 @@ export default function AdminDashboard() {
               { id: "users", icon: "fa-users", label: "Users" },
               { id: "applications", icon: "fa-file-lines", label: "Applications", badge: stats.pendingApplications },
               { id: "bookings", icon: "fa-calendar-check", label: "Bookings" },
+              { id: "jobs", icon: "fa-briefcase", label: "Jobs" },
               { id: "content", icon: "fa-flag", label: "Content", badge: stats.flaggedContent },
               { id: "analytics", icon: "fa-chart-pie", label: "Analytics" },
+              { id: "announcements", icon: "fa-bullhorn", label: "Announcements" },
+              { id: "premium", icon: "fa-crown", label: "Premium Users" },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -188,31 +190,6 @@ export default function AdminDashboard() {
             ))}
           </nav>
         </div>
-
-        {/* Admin Profile */}
-        {/* <div className="absolute bottom-0 left-0 right-0 p-6 border-t border-slate-200 bg-white">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold">
-              {admin?.displayName?.charAt(0) || "A"}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-slate-900 truncate">
-                {admin?.displayName}
-              </p>
-              <p className="text-xs text-slate-500 truncate">Administrator</p>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              auth.signOut();
-              router.push("/login");
-            }}
-            className="w-full px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors text-sm font-medium"
-          >
-            <i className="fa-solid fa-right-from-bracket mr-2"></i>
-            Logout
-          </button>
-        </div> */}
       </aside>
 
       {/* Main Content */}
@@ -394,9 +371,11 @@ export default function AdminDashboard() {
         {activeTab === "users" && <UserManagement onUpdate={refreshData} />}
         {activeTab === "applications" && <ApplicationReview onUpdate={refreshData} />}
         {activeTab === "bookings" && <BookingManagement onUpdate={refreshData} />}
+        {activeTab === "jobs" && <JobsManagement />}
         {activeTab === "content" && <ContentModeration onUpdate={refreshData} />}
-        {activeTab === "analytics" && <PremiumManagement />}
-        {/* {activeTab === "premium" && <PremiumManagement />} */}
+        {activeTab === "analytics" && <Analytics />}
+        {activeTab === "announcements" && <AnnouncementManagement />}
+        {activeTab === "premium" && <PremiumManagement />}
       </main>
     </div>
   );
