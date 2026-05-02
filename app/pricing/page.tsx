@@ -44,8 +44,8 @@ const plans: Plan[] = [
   {
     id: "advance",
     name: "Advance",
-    monthlyPrice: 12500,
-    yearlyPrice: 120000,
+    monthlyPrice: 3000,
+    yearlyPrice: 30000,
     billingCycle: "per month",
     description: "For serious learners ready to level up their skills",
     emoji: "⚡",
@@ -64,8 +64,8 @@ const plans: Plan[] = [
   {
     id: "pro",
     name: "Pro",
-    monthlyPrice: 32000,
-    yearlyPrice: 300000,
+    monthlyPrice: 5000,
+    yearlyPrice: 50000,
     billingCycle: "per month",
     description: "For teams and professionals who want it all",
     emoji: "👑",

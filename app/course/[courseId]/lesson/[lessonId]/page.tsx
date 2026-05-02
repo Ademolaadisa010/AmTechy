@@ -13,6 +13,7 @@ import {
   getDocs,
   updateDoc,
 } from "firebase/firestore";
+import { issueCertificate } from "@/lib/issueCertificate"; // ✅ ADDED
 
 interface CourseData {
   title: string;
@@ -57,9 +58,9 @@ export default function LessonPlayer() {
   const [userMessage, setUserMessage] = useState("");
   const [isAIThinking, setIsAIThinking] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const [isCompleting, setIsCompleting] = useState(false); // ✅ ADDED — prevent double clicks
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to latest message
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -101,15 +102,13 @@ export default function LessonPlayer() {
 
   const fetchLessonData = async () => {
     try {
-      // Get lesson from Firestore - REQUIRED
       const lessonDoc = await getDoc(
         doc(db, "courses", courseId, "lessons", `lesson_${lessonId}`)
       );
 
       if (lessonDoc.exists()) {
         const data = lessonDoc.data();
-        
-        // Validate that videoUrl exists in database
+
         if (!data.videoUrl) {
           console.warn(`Lesson ${lessonId} exists but has no videoUrl in database`);
           setLesson(null);
@@ -120,14 +119,13 @@ export default function LessonPlayer() {
           id: lessonDoc.id,
           title: data.title || `Module ${lessonId}`,
           description: data.description || "Lesson content",
-          videoUrl: data.videoUrl, // ONLY from database
+          videoUrl: data.videoUrl,
           videoDuration: data.videoDuration ? parseInt(data.videoDuration) : undefined,
           objectives: Array.isArray(data.objectives) ? data.objectives : [],
           codeExample: data.codeExample || "",
           content: data.content || "",
         });
       } else {
-        // Lesson not found in database
         console.error(`Lesson ${lessonId} not found in database for course ${courseId}`);
         setLesson(null);
       }
@@ -159,19 +157,26 @@ export default function LessonPlayer() {
     }
   };
 
+  // ✅ UPDATED — now issues certificate when last lesson is completed
   const handleCompleteLesson = async () => {
-    if (!enrollment || !course) return;
+    if (!enrollment || !course || isCompleting) return;
+
+    setIsCompleting(true);
 
     try {
-      const newProgress = Math.round((lessonId / course.totalModules) * 100);
-      const nextModule = lessonId < course.totalModules ? lessonId + 1 : lessonId;
+      const isLastLesson = lessonId >= course.totalModules;
+      const newProgress = isLastLesson ? 100 : Math.round((lessonId / course.totalModules) * 100);
+      const nextModule = isLastLesson ? lessonId : lessonId + 1;
 
+      // ── Update enrollment ──
       await updateDoc(doc(db, "enrollments", enrollment.id), {
         progress: newProgress,
         currentModule: nextModule,
         lastAccessed: new Date(),
+        ...(isLastLesson && { completedAt: new Date(), status: "completed" }),
       });
 
+      // ── Update progress doc ──
       const progressQuery = query(
         collection(db, "progress"),
         where("userId", "==", auth.currentUser?.uid),
@@ -189,17 +194,29 @@ export default function LessonPlayer() {
             `lesson${lessonId}`,
           ],
           updatedAt: new Date().toISOString(),
+          ...(isLastLesson && { completed: true, completedAt: new Date() }),
         });
       }
 
-      if (lessonId < course.totalModules) {
-        router.push(`/course/${courseId}/lesson/${nextModule}`);
+      // ✅ Issue certificate when last lesson is completed
+      if (isLastLesson && auth.currentUser) {
+        try {
+          await issueCertificate(auth.currentUser.uid, courseId);
+          console.log("✅ Certificate issued!");
+        } catch (certError) {
+          console.error("Certificate issue error:", certError);
+          // Don't block navigation if certificate fails
+        }
+
+        router.push("/certificates");
       } else {
-        alert("🎉 Congratulations! You've completed the course!");
-        router.push("/mylearning");
+        router.push(`/course/${courseId}/lesson/${nextModule}`);
       }
+
     } catch (error) {
       console.error("Error completing lesson:", error);
+    } finally {
+      setIsCompleting(false);
     }
   };
 
@@ -218,9 +235,7 @@ export default function LessonPlayer() {
     try {
       const response = await fetch("/api/ai-tutor", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: newMessages.map((msg) => ({
             role: msg.role,
@@ -232,11 +247,8 @@ export default function LessonPlayer() {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to get response from AI");
-      }
+      if (!response.ok) throw new Error("Failed to get response from AI");
 
-      // Handle streaming response
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let aiResponse = "";
@@ -249,12 +261,9 @@ export default function LessonPlayer() {
           const chunk = decoder.decode(value);
           aiResponse += chunk;
 
-          // Update UI with streaming response
           setAiMessages((prev) => {
             const updatedMessages = [...prev];
-            if (
-              updatedMessages[updatedMessages.length - 1]?.role === "assistant"
-            ) {
+            if (updatedMessages[updatedMessages.length - 1]?.role === "assistant") {
               updatedMessages[updatedMessages.length - 1].content = aiResponse;
             } else {
               updatedMessages.push({ role: "assistant", content: aiResponse });
@@ -269,15 +278,9 @@ export default function LessonPlayer() {
       console.error("Error sending message to AI:", error);
       setAiError("Failed to get response. Please try again.");
       setIsAIThinking(false);
-
-      // Add error message to chat
       setAiMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          content:
-            "Sorry, I encountered an error. Please try again in a moment.",
-        },
+        { role: "assistant", content: "Sorry, I encountered an error. Please try again in a moment." },
       ]);
     }
   };
@@ -293,19 +296,14 @@ export default function LessonPlayer() {
     );
   }
 
-  // Check if lesson exists in database
   if (!lesson || !lesson.videoUrl) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="max-w-md mx-auto text-center bg-white p-8 rounded-lg shadow-lg">
-          <div className="mb-4">
-            <i className="fa-solid fa-triangle-exclamation text-4xl text-red-600 mb-4"></i>
-          </div>
-          <h2 className="text-2xl font-bold text-slate-900 mb-2">
-            Lesson Not Found
-          </h2>
+          <i className="fa-solid fa-triangle-exclamation text-4xl text-red-600 mb-4"></i>
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Lesson Not Found</h2>
           <p className="text-slate-600 mb-6">
-            The lesson content for Module {lessonId} is not available in the database. 
+            The lesson content for Module {lessonId} is not available in the database.
             Please contact your instructor to add this lesson.
           </p>
           <button
@@ -399,14 +397,10 @@ export default function LessonPlayer() {
 
             {/* Lesson Details */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-              <h2 className="text-2xl font-bold text-slate-900 mb-4">
-                {lesson.title}
-              </h2>
+              <h2 className="text-2xl font-bold text-slate-900 mb-4">{lesson.title}</h2>
               <p className="text-slate-600 mb-6">{lesson.description}</p>
 
-              <h3 className="text-lg font-bold text-slate-900 mb-3">
-                Learning Objectives
-              </h3>
+              <h3 className="text-lg font-bold text-slate-900 mb-3">Learning Objectives</h3>
               <ul className="space-y-2 mb-6">
                 {lesson.objectives.map((obj, index) => (
                   <li key={index} className="flex items-start gap-2">
@@ -418,12 +412,8 @@ export default function LessonPlayer() {
 
               {lesson.content && (
                 <div className="mt-6 pt-6 border-t border-slate-200">
-                  <h3 className="text-lg font-bold text-slate-900 mb-3">
-                    Content
-                  </h3>
-                  <p className="text-slate-700 whitespace-pre-wrap">
-                    {lesson.content}
-                  </p>
+                  <h3 className="text-lg font-bold text-slate-900 mb-3">Content</h3>
+                  <p className="text-slate-700 whitespace-pre-wrap">{lesson.content}</p>
                 </div>
               )}
             </div>
@@ -432,9 +422,7 @@ export default function LessonPlayer() {
             {lesson.codeExample && (
               <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
                 <div className="bg-slate-800 px-4 py-3 flex justify-between items-center">
-                  <span className="text-sm font-mono text-slate-300">
-                    example.js
-                  </span>
+                  <span className="text-sm font-mono text-slate-300">example.js</span>
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(lesson.codeExample);
@@ -446,9 +434,7 @@ export default function LessonPlayer() {
                   </button>
                 </div>
                 <div className="p-4 bg-slate-900 overflow-x-auto">
-                  <pre className="text-sm text-slate-300 font-mono">
-                    {lesson.codeExample}
-                  </pre>
+                  <pre className="text-sm text-slate-300 font-mono">{lesson.codeExample}</pre>
                 </div>
               </div>
             )}
@@ -467,12 +453,24 @@ export default function LessonPlayer() {
                 <i className="fa-solid fa-arrow-left mr-2"></i>
                 Previous
               </button>
+
+              {/* ✅ UPDATED button — shows loading state while completing */}
               <button
                 onClick={handleCompleteLesson}
-                className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors"
+                disabled={isCompleting}
+                className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                {lessonId < course.totalModules ? "Next Lesson" : "Complete Course"}
-                <i className="fa-solid fa-arrow-right ml-2"></i>
+                {isCompleting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    {lessonId >= course.totalModules ? "Issuing Certificate..." : "Saving..."}
+                  </>
+                ) : (
+                  <>
+                    {lessonId < course.totalModules ? "Next Lesson" : "Complete Course 🎉"}
+                    <i className="fa-solid fa-arrow-right"></i>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -502,9 +500,7 @@ export default function LessonPlayer() {
                     aiMessages.map((msg, idx) => (
                       <div
                         key={idx}
-                        className={`flex ${
-                          msg.role === "user" ? "justify-end" : "justify-start"
-                        }`}
+                        className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                       >
                         <div
                           className={`max-w-[80%] px-4 py-3 rounded-2xl break-words ${
@@ -524,14 +520,8 @@ export default function LessonPlayer() {
                       <div className="bg-white border border-slate-200 px-4 py-3 rounded-2xl">
                         <div className="flex gap-1">
                           <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"></div>
-                          <div
-                            className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
-                            style={{ animationDelay: "0.1s" }}
-                          ></div>
-                          <div
-                            className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
-                            style={{ animationDelay: "0.2s" }}
-                          ></div>
+                          <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }}></div>
+                          <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }}></div>
                         </div>
                       </div>
                     </div>
@@ -552,9 +542,7 @@ export default function LessonPlayer() {
                       type="text"
                       value={userMessage}
                       onChange={(e) => setUserMessage(e.target.value)}
-                      onKeyPress={(e) =>
-                        e.key === "Enter" && handleSendAIMessage()
-                      }
+                      onKeyPress={(e) => e.key === "Enter" && handleSendAIMessage()}
                       placeholder="Ask a question..."
                       disabled={isAIThinking}
                       className="flex-1 px-4 py-2 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:bg-slate-100"
@@ -575,42 +563,32 @@ export default function LessonPlayer() {
             <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-4">
               <h3 className="font-bold text-slate-900 mb-4">Course Modules</h3>
               <div className="space-y-2">
-                {Array.from({ length: course.totalModules }, (_, i) => i + 1).map(
-                  (moduleNum) => (
-                    <button
-                      key={moduleNum}
-                      onClick={() =>
-                        router.push(`/course/${courseId}/lesson/${moduleNum}`)
-                      }
-                      className={`w-full p-3 rounded-lg text-left transition-colors ${
-                        moduleNum === lessonId
-                          ? "bg-indigo-50 border-2 border-indigo-600"
-                          : moduleNum < enrollment.currentModule
-                          ? "bg-green-50 hover:bg-green-100"
-                          : "bg-slate-50 hover:bg-slate-100"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span
-                          className={`font-medium ${
-                            moduleNum === lessonId
-                              ? "text-indigo-600"
-                              : "text-slate-900"
-                          }`}
-                        >
-                          Module {moduleNum}
-                        </span>
-                        {moduleNum < enrollment.currentModule ? (
-                          <i className="fa-solid fa-check-circle text-green-600"></i>
-                        ) : moduleNum === lessonId ? (
-                          <i className="fa-solid fa-play text-indigo-600"></i>
-                        ) : (
-                          <i className="fa-solid fa-lock text-slate-400"></i>
-                        )}
-                      </div>
-                    </button>
-                  )
-                )}
+                {Array.from({ length: course.totalModules }, (_, i) => i + 1).map((moduleNum) => (
+                  <button
+                    key={moduleNum}
+                    onClick={() => router.push(`/course/${courseId}/lesson/${moduleNum}`)}
+                    className={`w-full p-3 rounded-lg text-left transition-colors ${
+                      moduleNum === lessonId
+                        ? "bg-indigo-50 border-2 border-indigo-600"
+                        : moduleNum < enrollment.currentModule
+                        ? "bg-green-50 hover:bg-green-100"
+                        : "bg-slate-50 hover:bg-slate-100"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`font-medium ${moduleNum === lessonId ? "text-indigo-600" : "text-slate-900"}`}>
+                        Module {moduleNum}
+                      </span>
+                      {moduleNum < enrollment.currentModule ? (
+                        <i className="fa-solid fa-check-circle text-green-600"></i>
+                      ) : moduleNum === lessonId ? (
+                        <i className="fa-solid fa-play text-indigo-600"></i>
+                      ) : (
+                        <i className="fa-solid fa-lock text-slate-400"></i>
+                      )}
+                    </div>
+                  </button>
+                ))}
               </div>
             </div>
           </div>
