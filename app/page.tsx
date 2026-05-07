@@ -83,7 +83,7 @@ export default function HomePage(){
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-2">
               <Image src={Logo} width={50} alt="logo" />
-              <span className="text-xl font-bold text-gray-900 hidden sm:inline">AmTechy</span>
+              <span className="text-xl font-bold text-gray-900 sm:inline">AmTechy</span>
             </div>
             <div className="hidden md:flex items-center space-x-8">
               <a href="#features" className="text-gray-600 hover:text-[#1e40af] transition">Features</a>
@@ -377,7 +377,7 @@ export default function HomePage(){
                     <span className={`${track.color_text} font-semibold`}>{track.career}</span>
                   </div>
                   <Link href="/login">
-                    <button className={`w-full mt-4 sm:mt-6 ${track.color_bg} text-white py-2 sm:py-3 rounded-lg hover:opacity-90 transition font-semibold text-xs sm:text-base group-hover:shadow-lg`}>Start Learning</button>
+                    <button className={`w-full mt-4 sm:mt-6 ${track.color_bg} text-white py-3 rounded-lg hover:opacity-90 transition font-semibold text-xs sm:text-base group-hover:shadow-lg`}>Start Learning</button>
                   </Link>
                 </div>
               </motion.div>
@@ -593,7 +593,7 @@ export default function HomePage(){
             <div>
               <h4 className="text-white font-bold mb-4 text-sm sm:text-base">Company</h4>
               <ul className="space-y-2 text-xs sm:text-sm">
-                <li><a href="#" className="hover:text-[#1e40af] transition">About Us</a></li>
+                <li><Link href="/about-us" className="hover:text-[#1e40af] transition">About Us</Link></li>
                 <li><a href="#" className="hover:text-[#1e40af] transition">Blog</a></li>
                 <li><a href="#" className="hover:text-[#1e40af] transition">Careers</a></li>
               </ul>
@@ -601,14 +601,14 @@ export default function HomePage(){
             <div>
               <h4 className="text-white font-bold mb-4 text-sm sm:text-base">Support</h4>
               <ul className="space-y-2 text-xs sm:text-sm">
-                <li><a href="#" className="hover:text-[#1e40af] transition">Help Center</a></li>
-                <li><a href="#" className="hover:text-[#1e40af] transition">Privacy</a></li>
-                <li><a href="#" className="hover:text-[#1e40af] transition">Terms</a></li>
+                <li><Link href="/help-center" className="hover:text-[#1e40af] transition">Help Center</Link></li>
+                <li><Link href="/privacy" className="hover:text-[#1e40af] transition">Privacy</Link></li>
+                <li><Link href="/terms" className="hover:text-[#1e40af] transition">Terms</Link></li>
               </ul>
             </div>
           </div>
           <div className="border-t border-gray-800 pt-6 sm:pt-8 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs sm:text-sm text-gray-400">
-            <p>&copy; 2026 AmTechy. All rights reserved.</p>
+            <p>&copy; 2025 AmTechy. All rights reserved.</p>
             <p>Design by Abdulmalik with <i className="fa-solid fa-heart text-red-500"></i></p>
           </div>
         </div>
