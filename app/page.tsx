@@ -2,7 +2,7 @@
 import Image from "next/image";
 import { motion } from "framer-motion";
 import Hero from "@/public/hero.jpg";
-import Logo from "@/public/logo.svg";
+import Logo from "@/public/logo.png";
 import HeroSec from "@/public/hero-sec.jpg";
 import two from "@/public/two.jpg";
 import Ai from "@/public/ai.jpg";
@@ -82,8 +82,8 @@ export default function HomePage(){
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-2">
-              <Image src={Logo} width={50} alt="logo" />
-              <span className="text-xl font-bold text-gray-900 sm:inline">AmTechy</span>
+              <Image src={Logo} width={150} alt="logo" />
+              
             </div>
             <div className="hidden md:flex items-center space-x-8">
               <a href="#features" className="text-gray-600 hover:text-[#1e40af] transition">Features</a>
@@ -577,8 +577,7 @@ export default function HomePage(){
           <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-6 sm:gap-8 mb-8 sm:mb-12">
             <div className="lg:col-span-2">
               <div className="flex items-center space-x-2 mb-4">
-                <Image src={Logo} width={50} alt="logo" />
-                <span className="text-lg sm:text-xl font-bold text-white">AmTechy</span>
+                <Image src={Logo} width={150} alt="logo" />
               </div>
               <p className="text-gray-400 mb-4 sm:mb-6 max-w-sm text-xs sm:text-base">Empowering African learners to launch successful tech careers through AI-powered guidance and expert mentorship.</p>
             </div>

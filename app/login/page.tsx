@@ -13,7 +13,7 @@ import {
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
-import Logo from "@/public/logo.svg";
+import Logo from "@/public/logo.png";
 
 export default function Login() {
   const router = useRouter();
@@ -164,8 +164,7 @@ export default function Login() {
 
         <div className="relative z-10">
           <div className="flex items-center gap-2 mb-8">
-            <Image src={Logo} alt="AmTechy logo" width={50} />
-            <span className="text-2xl font-bold tracking-tight">AmTechy</span>
+            <Image src={Logo} alt="AmTechy logo" width={150} />
           </div>
           <h1 className="text-4xl font-bold leading-tight mb-4">
             Master Tech Skills with AI & Expert Tutors

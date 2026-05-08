@@ -12,8 +12,6 @@ import {
   getDocs,
   doc,
   getDoc,
-  orderBy,
-  limit,
 } from "firebase/firestore";
 import BottomBar from "../bottom-bar/page";
 
@@ -59,8 +57,8 @@ interface UserProgress {
   progress: number;
   completedLessons: number;
   totalLessons?: number;
-  lastAccessed?: Date;
-  completionDate?: Date;
+  lastAccessed?: any;
+  completionDate?: any;
 }
 
 export default function Progress() {
@@ -86,7 +84,11 @@ export default function Progress() {
         const userDoc = await getDoc(doc(db, "users", currentUser.uid));
         setUser({
           uid: currentUser.uid,
-          displayName: userDoc.data()?.fullName || userDoc.data()?.displayName || currentUser.displayName || "User",
+          displayName:
+            userDoc.data()?.fullName ||
+            userDoc.data()?.displayName ||
+            currentUser.displayName ||
+            "User",
           email: currentUser.email,
         });
         await fetchUserProgress(currentUser.uid);
@@ -101,7 +103,6 @@ export default function Progress() {
 
   const fetchUserProgress = async (userId: string) => {
     try {
-      // Fetch course progress data
       const progressQuery = query(
         collection(db, "progress"),
         where("userId", "==", userId)
@@ -109,56 +110,76 @@ export default function Progress() {
       const progressSnapshot = await getDocs(progressQuery);
 
       const coursesData: Course[] = [];
-      const skillsData: { [key: string]: Skill } = {};
+      const skillsMap: { [key: string]: Skill } = {};
       let totalHours = 0;
 
       for (const progressDoc of progressSnapshot.docs) {
         const progressData = progressDoc.data() as UserProgress;
-        
-        // Fetch course details
+
         try {
           const courseDoc = await getDoc(doc(db, "courses", progressData.courseId));
-          
+
           if (courseDoc.exists()) {
             const courseInfo = courseDoc.data();
-            const courseLessons = courseInfo.lessons ? Object.keys(courseInfo.lessons).length : progressData.totalLessons || 10;
-            
+
+            // ✅ FIX: Count lessons properly — avoid using lesson IDs as numbers
+            let totalLessonsCount = 10; // default fallback
+            if (typeof progressData.totalLessons === "number") {
+              totalLessonsCount = progressData.totalLessons;
+            } else if (courseInfo.lessons) {
+              if (typeof courseInfo.lessons === "object") {
+                totalLessonsCount = Object.keys(courseInfo.lessons).length;
+              } else if (typeof courseInfo.lessons === "number") {
+                totalLessonsCount = courseInfo.lessons;
+              }
+            } else if (typeof courseInfo.totalLessons === "number") {
+              totalLessonsCount = courseInfo.totalLessons;
+            }
+
+            // ✅ FIX: completedLessons must be a NUMBER not a string/ID
+            const completedLessonsCount =
+              typeof progressData.completedLessons === "number"
+                ? progressData.completedLessons
+                : 0;
+
+            // ✅ FIX: hoursLearned — use actual numeric completed lessons only
+            totalHours += completedLessonsCount;
+
+            const lastAccessedDate = progressData.lastAccessed
+              ? typeof progressData.lastAccessed.toDate === "function"
+                ? progressData.lastAccessed.toDate()
+                : new Date(progressData.lastAccessed)
+              : new Date();
+
             coursesData.push({
               id: courseDoc.id,
               title: courseInfo.title || "Untitled Course",
-              progress: progressData.progress || 0,
-              totalLessons: courseLessons,
-              completedLessons: progressData.completedLessons || 0,
+              progress: typeof progressData.progress === "number" ? progressData.progress : 0,
+              totalLessons: totalLessonsCount,
+              completedLessons: completedLessonsCount,
               thumbnail: courseInfo.imageUrl || courseInfo.thumbnail,
               category: courseInfo.category || "General",
-              lastAccessed: progressData.lastAccessed 
-                ? (progressData.lastAccessed as any).toDate?.() || new Date(progressData.lastAccessed as any)
-                : new Date(),
-              enrollmentDate: progressData.lastAccessed
-                ? (progressData.lastAccessed as any).toDate?.() || new Date(progressData.lastAccessed as any)
-                : new Date(),
+              lastAccessed: lastAccessedDate,
+              enrollmentDate: lastAccessedDate,
             });
 
             // Extract skills from course
             if (courseInfo.skills && Array.isArray(courseInfo.skills)) {
               courseInfo.skills.forEach((skill: string) => {
-                const progressPercent = progressData.progress || 0;
-                if (!skillsData[skill]) {
-                  skillsData[skill] = {
+                if (typeof skill !== "string" || !skill.trim()) return;
+                const pct = typeof progressData.progress === "number" ? progressData.progress : 0;
+                if (!skillsMap[skill]) {
+                  skillsMap[skill] = {
                     name: skill,
-                    level: Math.floor(progressPercent / 25) + 1,
-                    progress: progressPercent % 25 * 4,
+                    level: Math.max(1, Math.floor(pct / 25)),
+                    progress: pct % 25 * 4,
                   };
                 } else {
-                  // Update skill with higher progress
-                  skillsData[skill].progress = Math.max(skillsData[skill].progress, progressPercent % 25 * 4);
-                  skillsData[skill].level = Math.max(skillsData[skill].level, Math.floor(progressPercent / 25) + 1);
+                  skillsMap[skill].progress = Math.max(skillsMap[skill].progress, pct % 25 * 4);
+                  skillsMap[skill].level = Math.max(skillsMap[skill].level, Math.floor(pct / 25));
                 }
               });
             }
-
-            // Calculate hours (assuming 1 lesson = 1 hour)
-            totalHours += progressData.completedLessons || 0;
           }
         } catch (error) {
           console.error(`Error fetching course ${progressData.courseId}:`, error);
@@ -166,35 +187,34 @@ export default function Progress() {
       }
 
       setCourses(coursesData);
-      setSkills(Object.values(skillsData));
+      setSkills(Object.values(skillsMap));
 
-      // Calculate stats
       const completed = coursesData.filter((c) => c.progress === 100).length;
-      const avgCompletion = coursesData.length > 0 
-        ? Math.round(coursesData.reduce((sum, c) => sum + c.progress, 0) / coursesData.length)
-        : 0;
+      const avgCompletion =
+        coursesData.length > 0
+          ? Math.round(
+              coursesData.reduce((sum, c) => sum + c.progress, 0) / coursesData.length
+            )
+          : 0;
 
+      // ✅ FIX: totalHours is now guaranteed to be a clean integer
       setStats({
         totalCourses: coursesData.length,
         completedCourses: completed,
         hoursLearned: totalHours,
-        currentStreak: 7, // Can be calculated from daily activity
-        avgCompletion: avgCompletion,
+        currentStreak: 7,
+        avgCompletion,
       });
 
-      // Generate achievements based on actual progress
       generateAchievements(completed, coursesData.length, totalHours);
-
-      // Generate recent activity
       generateRecentActivity(coursesData);
-
     } catch (error) {
       console.error("Error fetching user progress:", error);
     }
   };
 
   const generateAchievements = (completed: number, enrolled: number, hours: number) => {
-    const achievementsData: Achievement[] = [
+    setAchievements([
       {
         id: "1",
         title: "First Steps",
@@ -258,22 +278,16 @@ export default function Progress() {
         icon: "fa-gem",
         unlocked: false,
       },
-    ];
-
-    setAchievements(achievementsData);
+    ]);
   };
 
   const generateRecentActivity = (coursesData: Course[]) => {
     const activities: Activity[] = [];
 
-    // Get recently accessed courses
-    const sortedCourses = [...coursesData].sort((a, b) => {
-      const dateA = a.lastAccessed?.getTime() || 0;
-      const dateB = b.lastAccessed?.getTime() || 0;
-      return dateB - dateA;
-    });
+    const sortedCourses = [...coursesData].sort(
+      (a, b) => (b.lastAccessed?.getTime() || 0) - (a.lastAccessed?.getTime() || 0)
+    );
 
-    // Add recent course activities
     sortedCourses.slice(0, 3).forEach((course) => {
       const activityDate = course.lastAccessed || new Date();
       if (course.progress === 100) {
@@ -289,7 +303,7 @@ export default function Progress() {
         activities.push({
           id: `progress_${course.id}`,
           type: "course_progress",
-          title: `Progress: ${course.title} (${course.progress}%)`,
+          title: `Progress in ${course.title} — ${course.progress}%`,
           date: activityDate,
           icon: "fa-book-open",
           color: "blue",
@@ -297,9 +311,7 @@ export default function Progress() {
       }
     });
 
-    // Sort by date (most recent first)
     activities.sort((a, b) => b.date.getTime() - a.date.getTime());
-
     setRecentActivity(activities.slice(0, 4));
   };
 
@@ -326,7 +338,7 @@ export default function Progress() {
   return (
     <main className="flex-1 flex bg-slate-50 min-w-0">
       <SideBar />
-      
+
       <section className="flex-1 overflow-y-auto p-6">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
@@ -334,7 +346,7 @@ export default function Progress() {
             <h1 className="text-3xl font-bold text-slate-900">My Progress</h1>
             <p className="text-slate-600 mt-1">Track your learning journey and achievements</p>
           </div>
-          <BottomBar/>
+          <BottomBar />
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -358,14 +370,17 @@ export default function Progress() {
               <p className="text-sm text-slate-600 font-medium">Completed</p>
             </div>
 
+            {/* ✅ FIXED: Hours Learned now shows clean number */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
               <div className="flex items-center justify-between mb-2">
                 <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
                   <i className="fa-solid fa-clock text-purple-600 text-xl"></i>
                 </div>
-                <span className="text-2xl font-bold text-slate-900">{stats.hoursLearned}</span>
+                <span className="text-2xl font-bold text-slate-900">
+                  {typeof stats.hoursLearned === "number" ? stats.hoursLearned : 0}
+                </span>
               </div>
-              <p className="text-sm text-slate-600 font-medium">Hours Learned</p>
+              <p className="text-sm text-slate-600 font-medium">Lessons Done</p>
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
@@ -382,50 +397,22 @@ export default function Progress() {
           {/* Tabs */}
           <div className="mb-6 border-b border-slate-200">
             <div className="flex gap-6">
-              <button
-                onClick={() => setActiveTab("overview")}
-                className={`pb-3 px-1 font-semibold transition-colors relative ${
-                  activeTab === "overview" ? "text-indigo-600" : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Overview
-                {activeTab === "overview" && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab("courses")}
-                className={`pb-3 px-1 font-semibold transition-colors relative ${
-                  activeTab === "courses" ? "text-indigo-600" : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Courses
-                {activeTab === "courses" && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab("achievements")}
-                className={`pb-3 px-1 font-semibold transition-colors relative ${
-                  activeTab === "achievements" ? "text-indigo-600" : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Achievements
-                {activeTab === "achievements" && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab("skills")}
-                className={`pb-3 px-1 font-semibold transition-colors relative ${
-                  activeTab === "skills" ? "text-indigo-600" : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Skills
-                {activeTab === "skills" && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>
-                )}
-              </button>
+              {["overview", "courses", "achievements", "skills"].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`pb-3 px-1 font-semibold capitalize transition-colors relative ${
+                    activeTab === tab
+                      ? "text-indigo-600"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  {tab}
+                  {activeTab === tab && (
+                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600"></div>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -436,34 +423,44 @@ export default function Progress() {
                 {/* Continue Learning */}
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                   <h2 className="text-xl font-bold text-slate-900 mb-4">Continue Learning</h2>
-                  {courses.filter(c => c.progress < 100).length > 0 ? (
-                    courses.filter(c => c.progress < 100).slice(0, 3).map((course) => (
-                      <div key={course.id} className="mb-4 last:mb-0 p-4 border border-slate-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer">
-                        <div className="flex items-center gap-4 mb-3">
-                          <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center text-white text-2xl flex-shrink-0">
-                            <i className="fa-solid fa-book"></i>
+                  {courses.filter((c) => c.progress < 100).length > 0 ? (
+                    courses
+                      .filter((c) => c.progress < 100)
+                      .slice(0, 3)
+                      .map((course) => (
+                        <div
+                          key={course.id}
+                          className="mb-4 last:mb-0 p-4 border border-slate-200 rounded-lg hover:shadow-md transition-shadow cursor-pointer"
+                        >
+                          <div className="flex items-center gap-4 mb-3">
+                            <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center text-white text-2xl flex-shrink-0">
+                              <i className="fa-solid fa-book"></i>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold text-slate-900 truncate">
+                                {course.title}
+                              </h3>
+                              <p className="text-sm text-slate-600">{course.category}</p>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <p
+                                className={`text-2xl font-bold ${getProgressColorClass(course.progress)}`}
+                              >
+                                {course.progress}%
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {course.completedLessons}/{course.totalLessons} lessons
+                              </p>
+                            </div>
                           </div>
-                          <div className="flex-1">
-                            <h3 className="font-semibold text-slate-900">{course.title}</h3>
-                            <p className="text-sm text-slate-600">{course.category}</p>
-                          </div>
-                          <div className="text-right flex-shrink-0">
-                            <p className={`text-2xl font-bold ${getProgressColorClass(course.progress)}`}>
-                              {course.progress}%
-                            </p>
-                            <p className="text-xs text-slate-500">
-                              {course.completedLessons}/{course.totalLessons} lessons
-                            </p>
+                          <div className="w-full bg-slate-200 rounded-full h-2">
+                            <div
+                              className={`h-2 rounded-full ${getProgressColor(course.progress)}`}
+                              style={{ width: `${course.progress}%` }}
+                            ></div>
                           </div>
                         </div>
-                        <div className="w-full bg-slate-200 rounded-full h-2">
-                          <div
-                            className={`h-2 rounded-full ${getProgressColor(course.progress)}`}
-                            style={{ width: `${course.progress}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    ))
+                      ))
                   ) : (
                     <div className="text-center py-8">
                       <i className="fa-solid fa-check-circle text-green-500 text-4xl mb-3"></i>
@@ -479,12 +476,28 @@ export default function Progress() {
                     <div className="space-y-4">
                       {recentActivity.map((activity) => (
                         <div key={activity.id} className="flex items-start gap-3">
-                          <div className={`w-10 h-10 bg-${activity.color}-100 rounded-full flex items-center justify-center flex-shrink-0`}>
-                            <i className={`fa-solid ${activity.icon} text-${activity.color}-600`}></i>
+                          <div
+                            className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                              activity.color === "green"
+                                ? "bg-green-100"
+                                : "bg-blue-100"
+                            }`}
+                          >
+                            <i
+                              className={`fa-solid ${activity.icon} ${
+                                activity.color === "green"
+                                  ? "text-green-600"
+                                  : "text-blue-600"
+                              }`}
+                            ></i>
                           </div>
-                          <div className="flex-1">
-                            <p className="text-sm font-medium text-slate-900">{activity.title}</p>
-                            <p className="text-xs text-slate-500">{activity.date.toLocaleDateString()}</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-slate-900 truncate">
+                              {activity.title}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {activity.date.toLocaleDateString()}
+                            </p>
                           </div>
                         </div>
                       ))}
@@ -497,14 +510,14 @@ export default function Progress() {
 
               {/* Sidebar */}
               <div className="space-y-6">
-                {/* Weekly Goal */}
+                {/* Streak */}
                 <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-sm p-6 text-white">
                   <h2 className="text-lg font-bold mb-2">Learning Streak</h2>
                   <p className="text-sm opacity-90 mb-4">Keep it up!</p>
                   <div className="w-full bg-white bg-opacity-30 rounded-full h-3 mb-2">
-                    <div className="bg-white h-3 rounded-full" style={{ width: "70%" }}></div>
+                    <div className="bg-white h-3 rounded-full" style={{ width: "100%" }}></div>
                   </div>
-                  <p className="text-sm">7 / 7 days active</p>
+                  <p className="text-sm">7 / 7 days active 🔥</p>
                 </div>
 
                 {/* Top Skills */}
@@ -515,8 +528,10 @@ export default function Progress() {
                       {skills.slice(0, 3).map((skill, idx) => (
                         <div key={idx}>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm font-medium text-slate-700">{skill.name}</span>
-                            <span className="text-xs text-slate-500">Level {skill.level}</span>
+                            <span className="text-sm font-medium text-slate-700">
+                              {skill.name}
+                            </span>
+                            <span className="text-xs text-slate-500">Lv {skill.level}</span>
                           </div>
                           <div className="w-full bg-slate-200 rounded-full h-2">
                             <div
@@ -533,22 +548,29 @@ export default function Progress() {
                 {/* Recent Achievements */}
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                   <h2 className="text-lg font-bold text-slate-900 mb-4">Recent Achievements</h2>
-                  {achievements.filter(a => a.unlocked).length > 0 ? (
+                  {achievements.filter((a) => a.unlocked).length > 0 ? (
                     <div className="space-y-3">
-                      {achievements.filter(a => a.unlocked).slice(0, 3).map((achievement) => (
-                        <div key={achievement.id} className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
-                            <i className={`fa-solid ${achievement.icon} text-yellow-600`}></i>
+                      {achievements
+                        .filter((a) => a.unlocked)
+                        .slice(0, 3)
+                        .map((achievement) => (
+                          <div key={achievement.id} className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center flex-shrink-0">
+                              <i className={`fa-solid ${achievement.icon} text-yellow-600`}></i>
+                            </div>
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">
+                                {achievement.title}
+                              </p>
+                              <p className="text-xs text-slate-500">{achievement.description}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">{achievement.title}</p>
-                            <p className="text-xs text-slate-500">{achievement.description}</p>
-                          </div>
-                        </div>
-                      ))}
+                        ))}
                     </div>
                   ) : (
-                    <p className="text-slate-500 text-center py-6 text-sm">No achievements yet</p>
+                    <p className="text-slate-500 text-center py-6 text-sm">
+                      No achievements yet
+                    </p>
                   )}
                 </div>
               </div>
@@ -561,18 +583,25 @@ export default function Progress() {
               {courses.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {courses.map((course) => (
-                    <div key={course.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-lg transition-shadow cursor-pointer">
+                    <div
+                      key={course.id}
+                      className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden hover:shadow-lg transition-shadow cursor-pointer"
+                    >
                       <div className="w-full h-40 bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-4xl">
                         <i className="fa-solid fa-graduation-cap"></i>
                       </div>
                       <div className="p-4">
-                        <h3 className="font-bold text-slate-900 mb-2 line-clamp-2">{course.title}</h3>
-                        <p className="text-sm text-slate-600 mb-3">{course.category}</p>
+                        <h3 className="font-bold text-slate-900 mb-1 line-clamp-2">
+                          {course.title}
+                        </h3>
+                        <p className="text-sm text-slate-500 mb-3">{course.category}</p>
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-sm text-slate-600">
                             {course.completedLessons}/{course.totalLessons} lessons
                           </span>
-                          <span className={`text-sm font-bold ${getProgressColorClass(course.progress)}`}>
+                          <span
+                            className={`text-sm font-bold ${getProgressColorClass(course.progress)}`}
+                          >
                             {course.progress}%
                           </span>
                         </div>
@@ -582,6 +611,12 @@ export default function Progress() {
                             style={{ width: `${course.progress}%` }}
                           ></div>
                         </div>
+                        {course.progress === 100 && (
+                          <div className="mt-3 flex items-center gap-1 text-green-600 text-xs font-semibold">
+                            <i className="fa-solid fa-circle-check"></i>
+                            Completed
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -589,7 +624,13 @@ export default function Progress() {
               ) : (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
                   <i className="fa-solid fa-book text-slate-300 text-5xl mb-4"></i>
-                  <p className="text-slate-600 font-medium">No enrolled courses yet</p>
+                  <p className="text-slate-600 font-medium mb-4">No enrolled courses yet</p>
+                  <button
+                    onClick={() => router.push("/courses")}
+                    className="px-6 py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
+                  >
+                    Browse Courses
+                  </button>
                 </div>
               )}
             </div>
@@ -607,20 +648,27 @@ export default function Progress() {
                       : "bg-white border-slate-200 opacity-50"
                   }`}
                 >
-                  <div className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 ${
-                    achievement.unlocked ? "bg-yellow-100" : "bg-slate-100"
-                  }`}>
-                    <i className={`fa-solid ${achievement.icon} text-3xl ${
-                      achievement.unlocked ? "text-yellow-600" : "text-slate-400"
-                    }`}></i>
+                  <div
+                    className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                      achievement.unlocked ? "bg-yellow-100" : "bg-slate-100"
+                    }`}
+                  >
+                    <i
+                      className={`fa-solid ${achievement.icon} text-3xl ${
+                        achievement.unlocked ? "text-yellow-600" : "text-slate-400"
+                      }`}
+                    ></i>
                   </div>
-                  <h3 className="font-bold text-slate-900 mb-2">{achievement.title}</h3>
+                  <h3 className="font-bold text-slate-900 mb-1">{achievement.title}</h3>
                   <p className="text-sm text-slate-600 mb-3">{achievement.description}</p>
-                  {achievement.unlocked && achievement.date && (
-                    <p className="text-xs text-slate-500">Unlocked {achievement.date.toLocaleDateString()}</p>
-                  )}
-                  {!achievement.unlocked && (
-                    <p className="text-xs text-slate-500">🔒 Locked</p>
+                  {achievement.unlocked && achievement.date ? (
+                    <p className="text-xs text-slate-500">
+                      Unlocked {achievement.date.toLocaleDateString()}
+                    </p>
+                  ) : (
+                    !achievement.unlocked && (
+                      <p className="text-xs text-slate-500">🔒 Locked</p>
+                    )
                   )}
                 </div>
               ))}
@@ -648,7 +696,9 @@ export default function Progress() {
                             style={{ width: `${skill.progress}%` }}
                           ></div>
                         </div>
-                        <p className="text-sm text-slate-600">{Math.round(skill.progress)}% to next level</p>
+                        <p className="text-sm text-slate-600">
+                          {Math.round(skill.progress)}% to next level
+                        </p>
                       </div>
                     ))}
                   </div>
@@ -656,7 +706,10 @@ export default function Progress() {
               ) : (
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
                   <i className="fa-solid fa-gem text-slate-300 text-5xl mb-4"></i>
-                  <p className="text-slate-600 font-medium">No skills tracked yet</p>
+                  <p className="text-slate-600 font-medium mb-2">No skills tracked yet</p>
+                  <p className="text-slate-400 text-sm">
+                    Enroll in courses with skill tags to start tracking
+                  </p>
                 </div>
               )}
             </div>

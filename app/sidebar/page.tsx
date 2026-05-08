@@ -7,6 +7,8 @@ import { auth, db } from "@/lib/firebase";
 import { signOut, onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
+import Image from "next/image";
+import Logo from "@/public/logo.png"
 
 interface NavItem {
   href: string;
@@ -148,12 +150,9 @@ export default function SideBar() {
       <aside className="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col sticky top-0 h-screen">
 
         {/* Logo */}
-        <div className="p-6 border-b border-slate-100">
+        <div className="border-b border-slate-100">
           <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <div className="w-8 h-8 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold shadow-md">
-              A
-            </div>
-            <span className="text-xl font-bold text-slate-900">AmTechy</span>
+            <Image src={Logo} width={150} className="mx-auto" alt="logo" />
           </Link>
         </div>
 

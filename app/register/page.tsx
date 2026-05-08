@@ -15,7 +15,7 @@ import {
 import { useRouter } from "next/navigation";
 import { db } from "@/lib/firebase";
 import { doc, setDoc, getDoc } from "firebase/firestore";
-import Logo from "@/public/logo.svg";
+import Logo from "@/public/logo.png";
 
 export default function Register() {
   const [role, setRole] = useState<"learner" | "tutor">("learner");
@@ -266,10 +266,7 @@ export default function Register() {
           </div>
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-8">
-              <Image src={Logo} alt="logo" width={50} />
-              <span className="text-2xl font-bold tracking-tight">
-                AmTechy
-              </span>
+              <Image src={Logo} alt="logo" width={150} />
             </div>
             <h1 className="text-4xl font-bold leading-tight mb-4">
               Master Tech Skills with AI & Expert Tutors
