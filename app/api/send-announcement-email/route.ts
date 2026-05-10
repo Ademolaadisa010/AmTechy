@@ -43,7 +43,7 @@ function generateEmail(name: string, title: string, message: string): string {
   return `
     <h2>${title}</h2>
     <p>Hi ${name},</p>
-    <p>${message}</p>
+    <p style="font-size: 20px">${message}</p>
     <p>Best regards,<br>The AmTechy Team</p>
   `;
 }
