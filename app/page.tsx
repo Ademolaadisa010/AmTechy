@@ -1,4 +1,6 @@
 "use client"
+import { useRouter } from "next/navigation";
+import { useEffect, useRef } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import Hero from "@/public/hero.jpg";
@@ -69,10 +71,50 @@ const staggerItem = {
     transition: { duration: 0.5 },
   },
 };
+const TEAM = [
+  {
+    name: "Abdulrosheed Abdulmalik",
+    role: "Founder, CEO & Lead Developer",
+    school: "University of Ibadan",
+    bio: "A passionate software engineer and entrepreneur from the University of Ibadan. Abdulrosheed built AmTechy from the ground up with one mission: to make world-class tech education accessible to every African learner. Combining deep technical expertise with a vision for inclusive learning, he leads product development, strategy, and growth.",
+    initials: "AA",
+    badges: ["Full-Stack Dev", "Entrepreneur", "UI/UX", "EdTech"],
+    social: { github: "#", linkedin: "#", twitter: "#" },
+  },
+];
 
 export default function HomePage(){
+  const router = useRouter();
+    const observerRef = useRef<IntersectionObserver | null>(null);
+  
+    useEffect(() => {
+      observerRef.current = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("animate-in");
+            }
+          });
+        },
+        { threshold: 0.1 }
+      );
+      document.querySelectorAll(".reveal").forEach((el) => {
+        observerRef.current?.observe(el);
+      });
+      return () => observerRef.current?.disconnect();
+    }, []);
   return(
     <div className="w-full min-h-screen font-sans antialiased bg-white text-gray-900 overflow-x-hidden">
+      <style>
+        {`
+          .reveal {
+          opacity: 0;
+          transform: translateY(36px);
+          transition: opacity 0.75s cubic-bezier(0.22,1,0.36,1), transform 0.75s cubic-bezier(0.22,1,0.36,1);
+        }
+        .reveal.animate-in { opacity: 1; transform: translateY(0); }
+        `}
+      </style>
       {/* Navigation */}
       <motion.nav 
         initial={{ y: -100, opacity: 0 }}
@@ -540,6 +582,64 @@ export default function HomePage(){
               </motion.div>
             ))}
           </motion.div>
+        </div>
+      </section>
+
+      <section style={{ padding: "100px 24px", background: "black" }}>
+        <div style={{ maxWidth: 1000, margin: "0 auto" }}>
+          <div style={{ marginBottom: 56, textAlign: "center" }}>
+            <div className="reveal" style={{ fontSize: "0.72rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.14em", color: "#818cf8", marginBottom: 16 }}>The Person Behind AmTechy</div>
+            <h2 className="reveal d1 display-font" style={{ fontSize: "clamp(2rem,4vw,3rem)", fontWeight: 800, letterSpacing: "-0.03em", color: "white" }}>Meet the Founder</h2>
+          </div>
+
+          {TEAM.map(member => (
+            <div key={member.name} className="reveal d2" style={{ background: "linear-gradient(145deg, rgba(99,102,241,0.07) 0%, rgba(139,92,246,0.04) 100%)", border: "1px solid rgba(99,102,241,0.18)", borderRadius: 28, padding: "48px 44px", backdropFilter: "blur(8px)", position: "relative", overflow: "hidden" }}>
+              {/* Background accent */}
+              <div style={{ position: "absolute", top: 0, right: 0, width: 300, height: 300, background: "radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)", pointerEvents: "none" }} />
+
+              <div style={{ display: "flex", gap: 40, alignItems: "flex-start", flexWrap: "wrap", position: "relative", zIndex: 1 }}>
+                {/* Avatar */}
+                <div style={{ flexShrink: 0 }}>
+                  <div style={{ width: 100, height: 100, borderRadius: 20, background: "linear-gradient(135deg, #4f46e5, #7c3aed)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2.25rem", fontWeight: 800, color: "white", marginBottom: 16, fontFamily: "Bricolage Grotesque, sans-serif", boxShadow: "0 20px 50px rgba(99,102,241,0.3)" }}>
+                    {member.initials}
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {Object.entries(member.social).map(([platform]) => (
+                      <div key={platform} style={{ width: 34, height: 34, borderRadius: 9, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+                        <i className={`fa-brands fa-${platform}`} style={{ color: "rgba(241,241,245,0.45)", fontSize: "0.85rem" }} />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Info */}
+                <div style={{ flex: 1, minWidth: 260 }}>
+                  <h3 className="display-font" style={{ fontSize: "1.75rem", fontWeight: 800, marginBottom: 4, letterSpacing: "-0.02em", color: "white" }}>{member.name}</h3>
+                  <p style={{ color: "#818cf8", fontWeight: 600, marginBottom: 8, fontSize: "0.95rem" }}>{member.role}</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, color: "rgba(241,241,245,0.35)", fontSize: "0.82rem", marginBottom: 20 }}>
+                    <i className="fa-solid fa-graduation-cap" />
+                    <span>{member.school}</span>
+                  </div>
+                  <p style={{ color: "rgba(241,241,245,0.6)", lineHeight: 1.8, marginBottom: 22, fontSize: "0.95rem" }}>{member.bio}</p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {member.badges.map(badge => (
+                      <span key={badge} style={{ padding: "5px 14px", background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.28)", borderRadius: 99, fontSize: "0.78rem", fontWeight: 600, color: "#a5b4fc" }}>{badge}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Quote */}
+              <div style={{ marginTop: 40, paddingTop: 36, borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+                <div className="quote-block" style={{ paddingLeft: 24 }}>
+                  <p style={{ fontSize: "1.15rem", color: "rgba(241,241,245,0.7)", fontStyle: "italic", lineHeight: 1.8, marginBottom: 14 }}>
+                    "I built AmTechy because I believe every brilliant mind in Africa deserves the same opportunities as anyone else in the world. Education is the equalizer."
+                  </p>
+                  <span style={{ color: "#818cf8", fontWeight: 700, fontSize: "0.88rem" }}>— Abdulrosheed Abdulmalik, Founder & CEO</span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       </section>
 

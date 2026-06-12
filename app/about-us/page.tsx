@@ -78,6 +78,7 @@ const SKILLS = [
 ];
 
 export default function AboutPage() {
+
   const router = useRouter();
   const observerRef = useRef<IntersectionObserver | null>(null);
 
@@ -98,9 +99,25 @@ export default function AboutPage() {
     return () => observerRef.current?.disconnect();
   }, []);
 
+  const founderSchema = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: "AmTechy",
+    url: "https://amtechy.name.ng",
+    founder: {
+      "@type": "Person",
+      name: "Abdulmalik"
+    },
+    description: "Amtechy is an AI-powered technology learning platform helping beginners discover and learrn tech skills.",
+  }
   return (
     <div className="min-h-screen overflow-x-hidden" style={{ background: "#07070f", color: "#f1f1f5" }}>
-
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(founderSchema),
+        }}
+      />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Clash+Display:wght@400;500;600;700&family=Bricolage+Grotesque:wght@300;400;500;600;700&display=swap');
 
