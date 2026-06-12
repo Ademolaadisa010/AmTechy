@@ -36,7 +36,7 @@ interface Tutor {
   hourlyRate: number;
   profileImage?: string;
   expertise: string[];
-  availability: string;
+  availability: any;
   verified: boolean;
 }
 
@@ -168,18 +168,12 @@ function TutorProfileModal({
             </h3>
             <span
               className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium ${
-                tutor.availability.toLowerCase().includes("available")
+                tutor.availability
                   ? "bg-green-50 text-green-700"
                   : "bg-orange-50 text-orange-700"
               }`}
             >
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  tutor.availability.toLowerCase().includes("available")
-                    ? "bg-green-500"
-                    : "bg-orange-500"
-                }`}
-              ></span>
+              
               {tutor.availability}
             </span>
           </div>
@@ -280,10 +274,12 @@ export default function FindTutor() {
             skills: data.expertise || data.skills || data.primarySkills || [],
             rating: data.rating || 5.0,
             reviewCount: data.totalReviews || data.reviewCount || 0,
-            hourlyRate: data.hourlyRate || 50,
+            hourlyRate: data.pricing.hourlyRate || 50,
             profileImage: data.profileImage,
             expertise: data.expertise || [],
-            availability: data.availability || "Available",
+            availability: typeof data.availability === "string"
+            ? data.availability
+            : "Available",
             verified: data.isVerified || data.verified || true,
           };
         });

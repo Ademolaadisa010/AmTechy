@@ -103,7 +103,7 @@ function PaymentModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-indigo-700 to-indigo-500 px-6 py-5">
@@ -150,9 +150,9 @@ function PaymentModal({
               Transfer Details
             </p>
             {[
-              { label: "Bank Name", value: "Guaranty Trust Bank (GTB)" },
-              { label: "Account Number", value: "0123456789", mono: true },
-              { label: "Account Name", value: "AmTechy Technology Ltd" },
+              { label: "Bank Name", value: "Palmpay" },
+              { label: "Account Number", value: "9058704410", mono: true },
+              { label: "Account Name", value: "Abdulroseed Abdulmalik" },
               { label: "Amount", value: toNaira(amount), highlight: true },
             ].map((row) => (
               <div key={row.label} className="flex items-center justify-between py-2 border-b border-slate-100 last:border-0">
@@ -300,7 +300,11 @@ export default function BookTutorClient() {
         skills: Array.isArray(d.expertise) ? d.expertise : Array.isArray(d.skills) ? d.skills : [],
         rating: typeof d.rating === "number" ? d.rating : 5.0,
         reviewCount: d.totalReviews ?? d.reviewCount ?? 0,
-        hourlyRate: typeof d.hourlyRate === "number" ? d.hourlyRate : 50,
+        // hourlyRate: typeof d.pricing.hourlyRate === "number" ? d.hourlyRate : 50,
+        hourlyRate:
+        typeof d?.pricing?.hourlyRate === "number"
+          ? d.pricing.hourlyRate
+          : 50,
         profileImage: d.profileImage || d.avatar || undefined,
         availability: d.availability || "Available",
         verified: d.isVerified ?? d.verified ?? true,
