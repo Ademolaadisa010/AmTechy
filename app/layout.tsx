@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "AmTechy - AI-Powered Learning Platform | Find Your Tech Career Path",
-  description: "Break into tech with AI-guided learning. Personalized paths from beginner to professional. Learn coding, data science & more. Start free today.",
+  description: "Break into tech with AI-guided learning. Personalized paths from beginner to professional. Learn coding, data science & more. Start free today. Founded by Abdulmalik",
   verification: {
     google: 'T4XmAA63JnamZFAL2CvdheEmOoBCyweaj_pohJH58Nc',
   },
