@@ -271,10 +271,21 @@ export default function FindTutor() {
             company: data.company || "",
             bio: data.bio || "",
             // Map skills/expertise arrays
-            skills: data.expertise || data.skills || data.primarySkills || [],
+            //skills: data.expertise || data.skills || data.primarySkills || [],
+            skills: Array.isArray(data.expertise)
+            ? data.expertise
+            : Array.isArray(data.skills)
+            ? data.skills
+            : Array.isArray(data.primarySkills)
+            ? data.primarySkills
+            : [],
             rating: data.rating || 5.0,
             reviewCount: data.totalReviews || data.reviewCount || 0,
-            hourlyRate: data.pricing.hourlyRate || 50,
+            //hourlyRate: data.pricing.hourlyRate || 50,
+            hourlyRate:
+            typeof data.pricing?.hourlyRate === "number"
+              ? data.pricing.hourlyRate
+              : 50,
             profileImage: data.profileImage,
             expertise: data.expertise || [],
             availability: typeof data.availability === "string"
